@@ -71,11 +71,13 @@ test('niveaux de stock (CP et C uniquement)', async () => {
   assert.equal(icon('CO', 5000), null);
 });
 
-test('plafond de stock : dépôts refusés au-delà de 4000 (CP et C)', async () => {
+test('stock plein : dépôts refusés une fois 4000 atteint (CP et C)', async () => {
   const { overCapacity } = await import('../src/config.js');
   const q = (CP = 0, C = 0, BC = 0, CO = 0) => ({ CP, C, BC, CO });
-  assert.deepEqual(overCapacity(q(100), { CP: 3900 }), []); // pile 4000 : accepté
-  assert.deepEqual(overCapacity(q(101), { CP: 3900 }), [{ code: 'CP', stock: 3900, room: 100 }]);
-  assert.deepEqual(overCapacity(q(0, 10), { C: 4200 }), [{ code: 'C', stock: 4200, room: 0 }]);
+  assert.deepEqual(overCapacity(q(1000), { CP: 3900 }), []); // dépasse 4000 : accepté
+  assert.deepEqual(overCapacity(q(10), { CP: 3999 }), []);
+  assert.deepEqual(overCapacity(q(10), { CP: 4000 }), [{ code: 'CP', stock: 4000 }]); // déjà plein : refusé
+  assert.deepEqual(overCapacity(q(0, 10), { C: 4200 }), [{ code: 'C', stock: 4200 }]);
+  assert.deepEqual(overCapacity(q(0, 10), { CP: 5000, C: 100 }), []); // CP plein mais rien déposé en CP
   assert.deepEqual(overCapacity(q(0, 0, 9999, 9999), { BC: 9000, CO: 9000 }), []); // BC/CO sans plafond
 });

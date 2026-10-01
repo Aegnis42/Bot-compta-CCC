@@ -45,17 +45,18 @@ export const STOCK_LEVELS = {
 export const stockLevel = (code, qty) =>
   STOCK_LEVELS.codes.includes(code) ? STOCK_LEVELS.levels.find((l) => qty >= l.min) : null;
 
-/** Stock maximum (palier 🔒) : au-delà, les dépôts de ces produits sont refusés. */
+/** Stock maximum (palier 🔒) : une fois atteint, les dépôts de ces produits sont refusés. */
 export const STOCK_MAX = STOCK_LEVELS.levels[0].min;
 
 /**
- * Produits dont le dépôt ferait dépasser le stock maximum.
- * stock = { CP: 3900, ... } (stock actuel). Renvoie [{ code, stock, room }] (room = quantité encore acceptée).
+ * Produits déposés alors que leur stock a déjà atteint le maximum (🔒).
+ * Un dépôt qui fait dépasser le maximum reste accepté : seul le stock déjà plein bloque.
+ * stock = { CP: 4100, ... } (stock actuel). Renvoie [{ code, stock }].
  */
 export function overCapacity(qty, stock) {
   return STOCK_LEVELS.codes
-    .filter((code) => qty[code] > 0 && (stock[code] ?? 0) + qty[code] > STOCK_MAX)
-    .map((code) => ({ code, stock: stock[code] ?? 0, room: Math.max(0, STOCK_MAX - (stock[code] ?? 0)) }));
+    .filter((code) => qty[code] > 0 && (stock[code] ?? 0) >= STOCK_MAX)
+    .map((code) => ({ code, stock: stock[code] ?? 0 }));
 }
 
 export const TARIFS = { normal: 'Normal', chatelerie: 'Chatelerie' };
