@@ -44,7 +44,7 @@ export const q = (title) => `'${String(title).replace(/'/g, "''")}'`;
 let metaCache = null;
 export async function getMeta(force = false) {
   if (metaCache && !force) return metaCache;
-  const data = await call('meta', { fields: 'properties(title,timeZone),sheets(properties(sheetId,title,gridProperties))' });
+  const data = await call('meta', { fields: 'properties(title,timeZone,locale),sheets(properties(sheetId,title,gridProperties))' });
   metaCache = {
     properties: data.properties,
     sheets: new Map(data.sheets.map((s) => [s.properties.title, s.properties])),
@@ -74,13 +74,44 @@ export async function readMany(ranges, { unformatted = false } = {}) {
   return data.valueRanges.map((vr) => vr.values ?? []);
 }
 
+/**
+ * Les formules sont interprétées selon la langue du Sheet : avec une virgule décimale (fr_FR…),
+ * les arguments sont séparés par ";" au lieu de ",". Le code écrit tout en syntaxe anglaise et convertit ici.
+ */
+export function localizeFormula(formula, semicolon) {
+  if (!semicolon || typeof formula !== 'string' || !formula.startsWith('=')) return formula;
+  let out = '';
+  let inString = false;
+  for (const ch of formula) {
+    if (ch === '"') inString = !inString;
+    out += ch === ',' && !inString ? ';' : ch;
+  }
+  return out;
+}
+
+async function usesSemicolon() {
+  const locale = (await getMeta()).properties.locale || 'en_US';
+  try {
+    return new Intl.NumberFormat(locale.replace('_', '-')).format(1.5).includes(',');
+  } catch {
+    return false;
+  }
+}
+
+async function localizeValues(values) {
+  const semi = await usesSemicolon();
+  return values.map((row) => row.map((v) => localizeFormula(v, semi)));
+}
+
 /** raw=true : les valeurs sont écrites telles quelles (pas de formule, pas d'interprétation). */
 export async function write(range, values, raw = true) {
+  if (!raw) values = await localizeValues(values);
   await call('update', { range, values, valueInputOption: raw ? 'RAW' : 'USER_ENTERED' });
 }
 
 export async function writeMany(data, raw = true) {
   if (!data.length) return;
+  if (!raw) data = await Promise.all(data.map(async (d) => ({ ...d, values: await localizeValues(d.values) })));
   await call('batchUpdateValues', { data, valueInputOption: raw ? 'RAW' : 'USER_ENTERED' });
 }
 

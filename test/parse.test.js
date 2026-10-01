@@ -31,3 +31,10 @@ test('semaines', () => {
   assert.match(normalizeWeek('7'), /^\d{4}-S07$/);
   assert.equal(normalizeWeek('abc'), null);
 });
+
+test('formules en paramètres régionaux français', async () => {
+  const { localizeFormula } = await import('../src/sheets.js');
+  assert.equal(localizeFormula('=IF(A1="a,b",SUM(B1,B2),0)', true), '=IF(A1="a,b";SUM(B1;B2);0)');
+  assert.equal(localizeFormula('=SUM(B1,B2)', false), '=SUM(B1,B2)');
+  assert.equal(localizeFormula('texte, simple', true), 'texte, simple');
+});
