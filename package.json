@@ -1,0 +1,20 @@
+{
+  "name": "bot-compta-ccc",
+  "version": "1.0.0",
+  "description": "Bot Discord de comptabilité des charbonniers, synchronisé avec Google Sheets",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "setup-sheet": "node src/setup-cli.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "googleapis": "^144.0.0"
+  }
+}
