@@ -256,7 +256,13 @@ const handlers = {
     if (sub === 'ajouter') {
       const user = i.options.getUser('membre', true);
       const member = await i.guild.members.fetch(user.id);
-      const name = (i.options.getString('nom') ?? member.displayName).trim();
+      // Charbonnier déjà enregistré mais dont le salon n'existe plus ici (supprimé, ou créé sur un autre serveur) :
+      // on le relie à un nouveau salon en gardant son nom, son onglet et son historique.
+      const old = findByUser(user.id);
+      const oldChannel = old?.channelId ? await i.guild.channels.fetch(old.channelId).catch(() => null) : null;
+      if (old && oldChannel) throw new UserError(`<@${user.id}> est déjà enregistré (**${old.name}**, salon <#${oldChannel.id}>).`);
+      if (old) await deactivateCharbonnier(old);
+      const name = (old?.name ?? i.options.getString('nom') ?? member.displayName).trim();
       try {
         validateName(name);
       } catch (e) {
@@ -353,6 +359,11 @@ async function autocomplete(i) {
 // ---------- Point d'entrée ----------
 
 export async function handleInteraction(i) {
+  // Le bot ne fonctionne que sur le serveur de la CCC (ni en message privé, ni ailleurs)
+  if (i.guildId !== env.guildId) {
+    if (i.isRepliable()) await i.reply({ content: 'Ce bot ne fonctionne que sur le serveur de la CCC.', flags: MessageFlags.Ephemeral }).catch(() => {});
+    return;
+  }
   if (i.isAutocomplete()) return autocomplete(i).catch(() => i.respond([]).catch(() => {}));
   if (!i.isChatInputCommand()) return;
   const handler = handlers[i.commandName];

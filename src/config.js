@@ -5,7 +5,8 @@ const clean = (v) => String(v ?? '').trim().replace(/^(["'])(.*)\1$/, '$2').trim
 
 export const env = {
   token: clean(process.env.DISCORD_TOKEN),
-  guildId: process.env.DISCORD_GUILD_ID || '1555109924265005087',
+  // Seul serveur sur lequel le bot fonctionne (volontairement fixé dans le code, pas de variable d'environnement)
+  guildId: '1550407272247599175',
   appsScriptUrl: clean(process.env.APPS_SCRIPT_URL),
   appsScriptSecret: clean(process.env.APPS_SCRIPT_SECRET),
   categoryId: process.env.CHARBONNIER_CATEGORY_ID || null,

@@ -44,6 +44,12 @@ client.once(Events.ClientReady, async (c) => {
   }
   await guild.commands.set(commandDefs);
   console.log(`${commandDefs.length} commandes enregistrées sur « ${guild.name} »`);
+  // Sur les autres serveurs où le bot serait présent : retirer ses commandes (il n'y fonctionne pas)
+  for (const other of (await c.guilds.fetch()).values()) {
+    if (other.id === env.guildId) continue;
+    const g = await other.fetch().catch(() => null);
+    await g?.commands.set([]).then(() => console.log(`Commandes retirées du serveur « ${g.name} » (non autorisé)`)).catch(() => {});
+  }
   setStockClient(client);
   startSync(client);
 });
