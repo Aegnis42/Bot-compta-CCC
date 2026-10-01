@@ -55,7 +55,7 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 | `/contrat voir id` · `/contrat liste` · `/contrat annuler id` | staff | Suivi des contrats |
 | `/charbonnier ajouter membre [nom] [salon]` | staff | Crée le salon privé + l'onglet |
 | `/charbonnier retirer membre` · `/charbonnier liste` | staff | Gestion des charbonniers |
-| `/setup` | staff | Recrée les onglets manquants et remet les formules à jour |
+| `/setup [categorie]` | staff | Initialise le bot : onglets du Sheet, formules, et catégorie Discord où ranger les salons des charbonniers (créée si besoin, salons existants déplacés) |
 
 « Staff » = permission *Gérer le serveur* (modifiable dans Paramètres du serveur → Intégrations → le bot), ou le rôle `STAFF_ROLE_ID`.
 
@@ -87,7 +87,7 @@ npm install
 cp .env.example .env   # puis remplir DISCORD_TOKEN, APPS_SCRIPT_URL et APPS_SCRIPT_SECRET
 npm start
 ```
-Au démarrage, le bot crée les onglets et enregistre les commandes sur le serveur. Ensuite : `/charbonnier ajouter @membre` pour chaque charbonnier.
+Au démarrage, le bot crée les onglets et enregistre les commandes sur le serveur. Ensuite : `/setup categorie:Charbonniers` puis `/charbonnier ajouter @membre` pour chaque charbonnier.
 
 Pour qu'il tourne en permanence, l'héberger sur un VPS / Raspberry Pi (avec `pm2`) ou un hébergeur Node (Railway, Fly.io…).
 
