@@ -4,7 +4,8 @@ Bot Discord qui tient la comptabilité des charbonniers dans un Google Sheet :
 
 - **Chaque charbonnier a son salon Discord** : il y écrit ce qu'il a déposé (`300 CP`, `120 C 40 BC`…). Le bot l'inscrit dans **son onglet** du Google Sheet et lui répond avec son total de la semaine.
 - **Sheet → Discord** : si quelqu'un ajoute une ligne à la main dans l'onglet d'un charbonnier, le bot l'annonce dans le salon du charbonnier (vérification toutes les 30 s).
-- **Salaires** : onglet `Salaires` avec ce qui est dû à chaque charbonnier pour la semaine (+ commande `/salaires` et récap automatique le lundi).
+- **Salaires** : onglet `Salaires` avec ce qui est dû à chaque charbonnier pour la semaine (+ commande `/salaires`).
+- **Avis de paie** : chaque **dimanche à 17h** (heure de Paris), le bot pingue chaque charbonnier dans son salon avec son salaire de la semaine et lui dit de venir le chercher aux locaux de la CCC.
 - **Stock** : déposé − livré + ajustements manuels, avec ce qu'il reste à produire pour honorer les contrats.
 - **Contrats** : commandes clients, livraisons partielles depuis le stock, reste à livrer et ce qu'il manque en stock.
 
@@ -50,6 +51,7 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 | `/recap [semaine] [membre]` | charbonnier | Dépôts et salaire de la semaine |
 | `/stock` | tous | Stock, reste à livrer, à produire |
 | `/stock-salons [categorie] [role]` | staff | Catégorie privée avec un salon vocal par marchandise affichant le stock (`Charbon | 3200`), visible seulement par les rôles choisis. Les noms des salons vocaux suivent le stock dans la limite de Discord (2 renommages / 10 min par salon) ; le salon `📦-stock-en-direct` affiche un tableau mis à jour instantanément |
+| `/avis-paie [semaine]` | staff | Envoie tout de suite les avis de paie (sinon automatique le dimanche à 17h) |
 | `/salaires [semaine]` | staff | Salaires de tous les charbonniers |
 | `/contrat creer client tarif cp c bc co [note]` | staff | Nouveau contrat (ID auto `CT-001`…) |
 | `/contrat livrer id [cp c bc co]` | staff | Livre depuis le stock (sans quantité : le maximum possible) |
@@ -95,7 +97,8 @@ Pour qu'il tourne en permanence, l'héberger sur un VPS / Raspberry Pi (avec `pm
 ### Options (`.env`)
 - `CHARBONNIER_CATEGORY_ID` : catégorie où créer les salons des charbonniers.
 - `STAFF_ROLE_ID` : rôle qui voit tous les salons charbonniers et a les droits staff.
-- `RECAP_CHANNEL_ID` : salon où poster les salaires de la semaine écoulée chaque lundi à 00 h.
+- `RECAP_CHANNEL_ID` : salon staff où poster le récapitulatif des salaires en même temps que les avis de paie (dimanche 17h).
+- Jour, heure et lieu de la paie : `PAIE` dans `src/config.js`.
 - `SYNC_INTERVAL_SECONDS` : fréquence de lecture du Sheet (30 s par défaut).
 
 ## Développement

@@ -1,6 +1,6 @@
-import { env } from './config.js';
+import { env, PAIE } from './config.js';
 import * as gs from './sheets.js';
-import { toSheetSerial, weekOfSerial, weekLabel, previousWeekLabel } from './time.js';
+import { toSheetSerial, weekOfSerial, weekLabel, localClock } from './time.js';
 import { qtyFrom, hasQty, newRef } from './utils.js';
 import { loadPrices, rachatValue } from './prices.js';
 import {
@@ -72,24 +72,45 @@ async function syncRegistry() {
   lastSignature = signature;
 }
 
-// ---------- Récap hebdomadaire ----------
+// ---------- Avis de paie (dimanche 17h) ----------
 
-/** Le lundi (changement de semaine), poste les salaires de la semaine écoulée dans RECAP_CHANNEL_ID. */
-async function weeklyRecap(client) {
-  if (!env.recapChannelId) return;
-  // Mémorisé dans l'onglet Config du Sheet pour survivre aux redémarrages / redéploiements
-  const last = getSetting('dernier_recap_salaires');
-  const prev = previousWeekLabel();
-  if (!last) {
-    // Premier démarrage : on ne poste pas tout de suite, on attend la prochaine fin de semaine
-    await setSetting('dernier_recap_salaires', prev);
-    return;
+const PAIE_KEY = 'dernier_avis_paie';
+
+/** Vrai le jour de paie à partir de l'heure prévue (rattrape un redémarrage du bot pendant la soirée). */
+export const isPayTime = ({ weekday, hour }) => weekday === PAIE.weekday && hour >= PAIE.hour;
+
+/**
+ * Pingue chaque charbonnier dans son salon avec son salaire de la semaine,
+ * et poste le récapitulatif dans RECAP_CHANNEL_ID s'il est défini. Renvoie le nombre d'avis envoyés.
+ */
+export async function sendPayNotices(client, week) {
+  const salaries = await salariesForWeek(week);
+  let sent = 0;
+  for (const s of salaries) {
+    if (!s.c.actif || !s.c.channelId || !s.c.discordId || s.montant <= 0) continue;
+    const channel = await client.channels.fetch(s.c.channelId).catch(() => null);
+    if (!channel) continue;
+    await channel.send({
+      content: `<@${s.c.discordId}> 💰 Ta paie de la semaine est prête : **${ui.money(s.montant)}**.\nViens la chercher ${PAIE.lieu} !`,
+      embeds: [ui.recapEmbed(s.c, week, s)],
+      allowedMentions: { users: [s.c.discordId] },
+    }).then(() => sent++).catch((e) => console.warn(`[paie] avis impossible pour ${s.c.name} :`, e.message));
   }
-  if (last === prev) return;
-  const channel = await client.channels.fetch(env.recapChannelId).catch(() => null);
-  if (!channel) return;
-  await channel.send({ content: `📅 Semaine du **${prev}** terminée — salaires à verser :`, embeds: [ui.salairesEmbed(prev, await salariesForWeek(prev))] });
-  await setSetting('dernier_recap_salaires', prev);
+  if (env.recapChannelId) {
+    const channel = await client.channels.fetch(env.recapChannelId).catch(() => null);
+    await channel?.send({ content: `📅 Paie de la semaine du **${week}** — à verser ${PAIE.lieu} :`, embeds: [ui.salairesEmbed(week, salaries)] }).catch(() => {});
+  }
+  return sent;
+}
+
+async function payday(client) {
+  if (!isPayTime(localClock())) return;
+  const week = weekLabel();
+  // Mémorisé dans l'onglet Config du Sheet : un seul envoi par semaine, même après un redéploiement
+  if (getSetting(PAIE_KEY) === week) return;
+  await setSetting(PAIE_KEY, week);
+  const sent = await sendPayNotices(client, week);
+  console.log(`[paie] ${sent} avis envoyés pour la semaine du ${week}`);
 }
 
 // ---------- Boucle ----------
@@ -104,7 +125,7 @@ export function startSync(client) {
       await loadPrices();
       await syncSheetToDiscord(client);
       await loadSettings();
-      await weeklyRecap(client);
+      await payday(client);
       await updateStockChannels(client);
     } catch (e) {
       console.error('[sync]', e.message);

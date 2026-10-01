@@ -37,6 +37,12 @@ export function weekOfSerial(serial) {
   return weekFromYMD(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
 }
 
+/** Jour de la semaine (0 = dimanche) et heure locale. */
+export function localClock(date = new Date()) {
+  const p = localParts(date);
+  return { weekday: new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay(), hour: p.h };
+}
+
 export const previousWeekLabel = () => weekLabel(new Date(Date.now() - 7 * 86400000));
 
 /**

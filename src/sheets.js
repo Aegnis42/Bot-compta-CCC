@@ -4,18 +4,24 @@ import { env } from './config.js';
  * Tout passe par le script Apps Script installé dans le Google Sheet (apps-script/Code.gs),
  * qui relaie les appels vers l'API Google Sheets.
  */
+const RETRYABLE = new Set(['meta', 'get', 'batchGet', 'update', 'batchUpdateValues', 'clear']);
+
 async function call(op, args) {
   if (!env.appsScriptUrl || !env.appsScriptSecret) {
     throw new Error('APPS_SCRIPT_URL ou APPS_SCRIPT_SECRET manquant dans le .env (voir README)');
   }
+  // Seules les opérations rejouables sans risque sont réessayées : rejouer un batchUpdate
+  // (ajout d'onglet, suppression de ligne…) déjà exécuté par Google agirait deux fois.
+  const attempts = RETRYABLE.has(op) ? 3 : 1;
   let lastErr;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     try {
       const res = await fetch(env.appsScriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret: env.appsScriptSecret, op, args }),
         redirect: 'follow',
+        signal: AbortSignal.timeout(60000), // un script Google bloqué ne doit pas figer le bot
       });
       const text = await res.text();
       let json;
@@ -28,7 +34,7 @@ async function call(op, args) {
       return json.data ?? {};
     } catch (e) {
       lastErr = e;
-      if (e.fatal) break;
+      if (e.fatal || attempt + 1 >= attempts) break;
       await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
     }
   }

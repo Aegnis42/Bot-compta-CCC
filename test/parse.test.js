@@ -46,3 +46,12 @@ test('formules en paramètres régionaux français', async () => {
   assert.equal(localizeFormula('=SUM(B1,B2)', false), '=SUM(B1,B2)');
   assert.equal(localizeFormula('texte, simple', true), 'texte, simple');
 });
+
+test('heure de la paie : dimanche à partir de 17h', async () => {
+  const { isPayTime } = await import('../src/sync.js');
+  assert.equal(isPayTime({ weekday: 0, hour: 17 }), true);
+  assert.equal(isPayTime({ weekday: 0, hour: 23 }), true);
+  assert.equal(isPayTime({ weekday: 0, hour: 16 }), false);
+  assert.equal(isPayTime({ weekday: 1, hour: 17 }), false);
+  assert.equal(isPayTime({ weekday: 6, hour: 17 }), false);
+});

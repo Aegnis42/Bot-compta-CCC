@@ -8,6 +8,7 @@ import { rachatValue, venteValue, loadPrices } from './prices.js';
 import { ensureStructure } from './setup.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
 import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
+import { sendPayNotices } from './sync.js';
 import {
   allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, validateName,
   recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
@@ -49,6 +50,10 @@ export const commandDefs = [
     .addStringOption((o) => o.setName('categorie').setDescription('Nom de la catégorie (par défaut : Stock)').setMaxLength(100))
     .addRoleOption((o) => o.setName('role').setDescription('Rôle qui pourra voir le stock (relancer la commande pour en ajouter d\'autres)')),
 
+  new SlashCommandBuilder().setName('avis-paie').setDescription('Envoyer maintenant à chaque charbonnier son avis de paie (auto : dimanche 17h)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addStringOption(weekOption),
+
   new SlashCommandBuilder().setName('salaires').setDescription('Salaires de tous les charbonniers pour une semaine')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption(weekOption),
@@ -85,7 +90,7 @@ export const commandDefs = [
 
 // ---------- Helpers ----------
 
-const EPHEMERAL = new Set(['salaires', 'setup', 'charbonnier', 'stock-salons']);
+const EPHEMERAL = new Set(['avis-paie', 'salaires', 'setup', 'charbonnier', 'stock-salons']);
 
 export const isStaff = (member) =>
   member?.permissions?.has(PermissionFlagsBits.ManageGuild) || (env.staffRoleId && member?.roles?.cache?.has(env.staffRoleId));
@@ -190,6 +195,12 @@ const handlers = {
     lines.push('Seuls les rôles autorisés (et les admins) voient la catégorie. Pour ajouter un rôle : relance la commande avec `role`, ou modifie les permissions de la catégorie dans Discord.');
     lines.push('ℹ️ Discord limite les renommages : les chiffres se mettent à jour au plus toutes les 5 minutes.');
     await i.editReply(lines.join('\n'));
+  },
+
+  async 'avis-paie'(i) {
+    const week = weekFrom(i);
+    const sent = await sendPayNotices(i.client, week);
+    await i.editReply(sent ? `✅ ${sent} avis de paie envoyé(s) pour la semaine du ${week}.` : `Aucun charbonnier n'a de salaire pour la semaine du ${week}.`);
   },
 
   async salaires(i) {

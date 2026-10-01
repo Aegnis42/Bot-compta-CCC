@@ -26,6 +26,9 @@ export const PRODUCTS = [
 ];
 export const CODES = PRODUCTS.map((p) => p.code);
 
+// Avis de paie : jour (0 = dimanche) et heure (fuseau TIMEZONE) où chaque charbonnier est prévenu dans son salon
+export const PAIE = { weekday: 0, hour: 17, lieu: 'aux locaux de la CCC' };
+
 export const TARIFS = { normal: 'Normal', chatelerie: 'Chatelerie' };
 
 export const SHEETS = {
