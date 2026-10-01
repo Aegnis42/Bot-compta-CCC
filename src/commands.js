@@ -7,6 +7,7 @@ import { normalizeWeek, weekLabel } from './time.js';
 import { rachatValue, venteValue, loadPrices } from './prices.js';
 import { ensureStructure } from './setup.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
+import { setupStockChannels } from './stockChannels.js';
 import {
   allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, validateName,
   recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
@@ -42,6 +43,11 @@ export const commandDefs = [
     .addUserOption(memberOption),
 
   new SlashCommandBuilder().setName('stock').setDescription('Voir le stock et ce qu\'il reste à produire pour les contrats'),
+
+  new SlashCommandBuilder().setName('stock-salons').setDescription('Crée une catégorie privée affichant le stock en salons vocaux (ex : Charbon | 3200)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addStringOption((o) => o.setName('categorie').setDescription('Nom de la catégorie (par défaut : Stock)').setMaxLength(100))
+    .addRoleOption((o) => o.setName('role').setDescription('Rôle qui pourra voir le stock (relancer la commande pour en ajouter d\'autres)')),
 
   new SlashCommandBuilder().setName('salaires').setDescription('Salaires de tous les charbonniers pour une semaine')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
@@ -79,7 +85,7 @@ export const commandDefs = [
 
 // ---------- Helpers ----------
 
-const EPHEMERAL = new Set(['salaires', 'setup', 'charbonnier']);
+const EPHEMERAL = new Set(['salaires', 'setup', 'charbonnier', 'stock-salons']);
 
 export const isStaff = (member) =>
   member?.permissions?.has(PermissionFlagsBits.ManageGuild) || (env.staffRoleId && member?.roles?.cache?.has(env.staffRoleId));
@@ -169,6 +175,19 @@ const handlers = {
 
   async stock(i) {
     await i.editReply({ embeds: [ui.stockEmbed(await getStock())] });
+  },
+
+  async 'stock-salons'(i) {
+    const role = i.options.getRole('role');
+    const name = i.options.getString('categorie')?.trim() || 'Stock';
+    const { cat, created } = await setupStockChannels(i.guild, i.client.user.id, name, role).catch((e) => {
+      throw e instanceof UserError ? e : new UserError(`Impossible de créer les salons (permission « Gérer les salons » / « Gérer les rôles » ?) : ${e.message}`);
+    });
+    const lines = [created.length ? `✅ Créé : ${created.join(', ')}.` : `✅ Catégorie **${cat.name}** déjà en place.`];
+    if (role) lines.push(`👁️ Le rôle ${role} peut voir le stock.`);
+    lines.push('Seuls les rôles autorisés (et les admins) voient la catégorie. Pour ajouter un rôle : relance la commande avec `role`, ou modifie les permissions de la catégorie dans Discord.');
+    lines.push('ℹ️ Discord limite les renommages : les chiffres se mettent à jour au plus toutes les 5 minutes.');
+    await i.editReply(lines.join('\n'));
   },
 
   async salaires(i) {

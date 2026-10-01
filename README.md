@@ -49,6 +49,7 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 | `/annuler-depot [ref] [membre]` | charbonnier / staff | Supprimer un dépôt (le dernier par défaut) |
 | `/recap [semaine] [membre]` | charbonnier | Dépôts et salaire de la semaine |
 | `/stock` | tous | Stock, reste à livrer, à produire |
+| `/stock-salons [categorie] [role]` | staff | Catégorie privée avec un salon vocal par marchandise affichant le stock (`Charbon | 3200`), visible seulement par les rôles choisis. Mise à jour au plus toutes les 5 min (limite Discord) |
 | `/salaires [semaine]` | staff | Salaires de tous les charbonniers |
 | `/contrat creer client tarif cp c bc co [note]` | staff | Nouveau contrat (ID auto `CT-001`…) |
 | `/contrat livrer id [cp c bc co]` | staff | Livre depuis le stock (sans quantité : le maximum possible) |

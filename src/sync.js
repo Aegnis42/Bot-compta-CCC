@@ -8,6 +8,8 @@ import {
   loadRegistry, activeCharbonniers, allCharbonniers, readTabs, weekSummary, salariesForWeek, ensureTab, rebuildFormulas, IDX,
 } from './charbonniers.js';
 import * as ui from './ui.js';
+import { loadSettings } from './settings.js';
+import { updateStockChannels } from './stockChannels.js';
 
 // ---------- Google Sheet → Discord ----------
 
@@ -115,6 +117,8 @@ export function startSync(client) {
       await loadPrices();
       await syncSheetToDiscord(client);
       await weeklyRecap(client);
+      await loadSettings();
+      await updateStockChannels(client);
     } catch (e) {
       console.error('[sync]', e.message);
     } finally {
