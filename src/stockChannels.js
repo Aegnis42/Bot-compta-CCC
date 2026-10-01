@@ -1,5 +1,5 @@
 import { ChannelType, OverwriteType, PermissionFlagsBits as P } from 'discord.js';
-import { env, PRODUCTS } from './config.js';
+import { env, PRODUCTS, stockLevel } from './config.js';
 import { getStock, listContracts, isOpen } from './contrats.js';
 import { getSetting, setSetting } from './settings.js';
 import * as ui from './ui.js';
@@ -17,7 +17,11 @@ const nextRenameAt = new Map(); // salon → date à partir de laquelle Discord 
 let lastBoard = null;
 let clientRef = null;
 
-const channelName = (p, stock) => `${p.name} | ${Math.round(stock[p.code]?.stock ?? 0)}`;
+function channelName(p, stock) {
+  const qty = Math.round(stock[p.code]?.stock ?? 0);
+  const level = stockLevel(p.code, qty);
+  return `${p.name} | ${qty}${level ? ` ${level.icon}` : ''}`;
+}
 
 async function fetchChannel(guild, id, type) {
   if (!id) return null;

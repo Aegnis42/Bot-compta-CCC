@@ -29,6 +29,22 @@ export const CODES = PRODUCTS.map((p) => p.code);
 // Avis de paie : jour (0 = dimanche) et heure (fuseau TIMEZONE) où chaque charbonnier est prévenu dans son salon
 export const PAIE = { weekday: 0, hour: 17, lieu: 'aux locaux de la CCC' };
 
+// Niveaux de stock affichés sur Discord (salons vocaux, tableau, /stock). Du plus haut au plus bas : le premier
+// palier atteint l'emporte (ex : 2500 → 🟢). Produits non listés : pas d'indicateur.
+export const STOCK_LEVELS = {
+  codes: ['CP', 'C'],
+  levels: [
+    { min: 4000, icon: '🔒', label: 'stock plein' },
+    { min: 2000, icon: '🟢', label: 'bon niveau' },
+    { min: 1000, icon: '🟠', label: 'niveau moyen' },
+    { min: -Infinity, icon: '🔴', label: 'stock bas' },
+  ],
+};
+
+/** Palier de stock d'un produit, ou null s'il n'a pas d'indicateur. */
+export const stockLevel = (code, qty) =>
+  STOCK_LEVELS.codes.includes(code) ? STOCK_LEVELS.levels.find((l) => qty >= l.min) : null;
+
 export const TARIFS = { normal: 'Normal', chatelerie: 'Chatelerie' };
 
 export const SHEETS = {

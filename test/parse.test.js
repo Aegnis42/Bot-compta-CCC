@@ -55,3 +55,18 @@ test('heure de la paie : dimanche à partir de 17h', async () => {
   assert.equal(isPayTime({ weekday: 1, hour: 17 }), false);
   assert.equal(isPayTime({ weekday: 6, hour: 17 }), false);
 });
+
+test('niveaux de stock (CP et C uniquement)', async () => {
+  const { stockLevel } = await import('../src/config.js');
+  const icon = (code, n) => stockLevel(code, n)?.icon ?? null;
+  assert.equal(icon('C', 4000), '🔒');
+  assert.equal(icon('C', 5200), '🔒');
+  assert.equal(icon('CP', 3999), '🟢');
+  assert.equal(icon('CP', 2000), '🟢');
+  assert.equal(icon('C', 1999), '🟠');
+  assert.equal(icon('C', 1000), '🟠');
+  assert.equal(icon('C', 999), '🔴');
+  assert.equal(icon('CP', 0), '🔴');
+  assert.equal(icon('BC', 50), null);
+  assert.equal(icon('CO', 5000), null);
+});

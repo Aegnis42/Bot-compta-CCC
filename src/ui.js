@@ -1,5 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import { env, PRODUCTS } from './config.js';
+import { env, PRODUCTS, stockLevel, STOCK_LEVELS } from './config.js';
 import { isOpen } from './contrats.js';
 
 export const COLORS = { ok: 0x2ecc71, info: 0x3498db, warn: 0xe67e22, err: 0xe74c3c, sheet: 0x0f9d58, coal: 0x2c2f33 };
@@ -53,12 +53,17 @@ export function salairesEmbed(week, list) {
 export function stockEmbed(stock) {
   const lines = PRODUCTS.map((p) => {
     const s = stock[p.code];
-    let line = `**${p.name} (${p.code})** : **${fmt(s.stock)}** en stock`;
+    const level = stockLevel(p.code, s.stock);
+    let line = `${level ? `${level.icon} ` : ''}**${p.name} (${p.code})** : **${fmt(s.stock)}** en stock${level ? ` (${level.label})` : ''}`;
     if (s.reste > 0) line += ` · ${fmt(s.reste)} à livrer`;
     if (s.aProduire > 0) line += ` · ⚠️ **${fmt(s.aProduire)} à produire**`;
     return line;
   });
-  return new EmbedBuilder().setColor(COLORS.info).setTitle('📦 Stock').setDescription(lines.join('\n')).setTimestamp();
+  const legend = STOCK_LEVELS.levels
+    .map((l, i) => `${l.icon} ${i === STOCK_LEVELS.levels.length - 1 ? `< ${fmt(STOCK_LEVELS.levels[i - 1].min)}` : `≥ ${fmt(l.min)}`}`)
+    .join(' · ');
+  return new EmbedBuilder().setColor(COLORS.info).setTitle('📦 Stock').setDescription(lines.join('\n'))
+    .setFooter({ text: `Niveaux (${STOCK_LEVELS.codes.join(', ')}) : ${legend}` }).setTimestamp();
 }
 
 export function contractsSummaryEmbed(open) {
