@@ -94,6 +94,11 @@ const INIT = {
     return [gs.headerFormat(sheetId), gs.columnFormat(sheetId, 1, gs.DATE_TIME), list([TARIFS.normal, TARIFS.chatelerie], 3), list(['OUI'], 19)];
   },
 
+  async [SHEETS.CONFIG](sheetId) {
+    await gs.write(`${gs.q(SHEETS.CONFIG)}!A1:B1`, [['Clé', 'Valeur']]);
+    return [gs.headerFormat(sheetId), gs.columnFormat(sheetId, 1, gs.TEXT)];
+  },
+
   async [SHEETS.LIVRAISONS](sheetId) {
     const tarif = `IFERROR(VLOOKUP(B2:B,${C}!A:D,4,FALSE),"")`;
     const montant = `={"Montant (${env.currency})";ARRAYFORMULA(IF(B2:B="","",IFERROR(ROUND(${PRODUCTS.map((_, i) => `${COLS.livraison[i]}2:${COLS.livraison[i]}*${sellPrice(i, tarif)}`).join('+')},2),"?")))}`;
@@ -108,7 +113,7 @@ const INIT = {
  */
 export async function ensureStructure() {
   const meta = await gs.getMeta(true);
-  const order = [SHEETS.PRIX, SHEETS.CHARBONNIERS, SHEETS.SALAIRES, SHEETS.STOCK, SHEETS.CONTRATS, SHEETS.LIVRAISONS];
+  const order = [SHEETS.PRIX, SHEETS.CHARBONNIERS, SHEETS.SALAIRES, SHEETS.STOCK, SHEETS.CONTRATS, SHEETS.LIVRAISONS, SHEETS.CONFIG];
   const missing = order.filter((t) => !meta.sheets.has(t));
 
   const requests = [];

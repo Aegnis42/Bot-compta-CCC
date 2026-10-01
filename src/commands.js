@@ -6,6 +6,7 @@ import { UserError, emptyQty, hasQty } from './utils.js';
 import { normalizeWeek, weekLabel } from './time.js';
 import { rachatValue, venteValue, loadPrices } from './prices.js';
 import { ensureStructure } from './setup.js';
+import { loadSettings, getSetting, setSetting } from './settings.js';
 import {
   allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, validateName,
   recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
@@ -71,8 +72,9 @@ export const commandDefs = [
       .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord').setRequired(true)))
     .addSubcommand((s) => s.setName('liste').setDescription('Liste des charbonniers')),
 
-  new SlashCommandBuilder().setName('setup').setDescription('(Ré)initialiser la structure du Google Sheet')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  new SlashCommandBuilder().setName('setup').setDescription('Initialiser le bot : Google Sheet + catégorie des salons charbonniers')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addStringOption((o) => o.setName('categorie').setDescription('Nom de la catégorie où mettre les salons des charbonniers (créée si besoin)').setMaxLength(100)),
 ].map((c) => c.toJSON());
 
 // ---------- Helpers ----------
@@ -106,6 +108,21 @@ function weekFrom(i) {
   if (!week) throw new UserError('Semaine invalide. Format attendu : `2026-S40` ou `40`.');
   return week;
 }
+
+/** Catégorie des salons charbonniers (réglée par /setup), si elle existe toujours. */
+async function charbonnierCategory(guild) {
+  const id = getSetting(CATEGORY_KEY) ?? env.categoryId;
+  if (!id) return null;
+  const cat = await guild.channels.fetch(id).catch(() => null);
+  return cat?.type === ChannelType.GuildCategory ? cat : null;
+}
+const CATEGORY_KEY = 'categorie_charbonniers';
+
+const staffOverwrites = (guild, botId) => [
+  { id: guild.roles.everyone.id, type: OverwriteType.Role, deny: [PermissionFlagsBits.ViewChannel] },
+  { id: botId, type: OverwriteType.Member, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] },
+  ...(env.staffRoleId ? [{ id: env.staffRoleId, type: OverwriteType.Role, allow: [PermissionFlagsBits.ViewChannel] }] : []),
+];
 
 const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'charbonnier';
 
@@ -217,7 +234,7 @@ const handlers = {
         channel = await i.guild.channels.create({
           name: `charbon-${slug(name)}`,
           type: ChannelType.GuildText,
-          parent: env.categoryId ?? undefined,
+          parent: (await charbonnierCategory(i.guild))?.id,
           topic: `Dépôts de charbon de ${name}`,
           permissionOverwrites: [
             { id: i.guild.roles.everyone.id, type: OverwriteType.Role, deny: [PermissionFlagsBits.ViewChannel] },
@@ -250,7 +267,36 @@ const handlers = {
     await loadRegistry();
     await loadPrices();
     await rebuildFormulas();
-    await i.editReply(created.length ? `✅ Onglets créés : ${created.join(', ')}. Formules mises à jour.` : '✅ Structure déjà en place. Formules mises à jour.');
+    await loadSettings();
+    const lines = [created.length ? `✅ Onglets créés dans le Google Sheet : ${created.join(', ')}.` : '✅ Google Sheet déjà en place, formules mises à jour.'];
+
+    const catName = i.options.getString('categorie')?.trim();
+    if (catName) {
+      let cat = i.guild.channels.cache.find((ch) => ch.type === ChannelType.GuildCategory && ch.name.toLowerCase() === catName.toLowerCase());
+      if (cat) {
+        lines.push(`📁 Catégorie existante utilisée : **${cat.name}**.`);
+      } else {
+        cat = await i.guild.channels.create({ name: catName, type: ChannelType.GuildCategory, permissionOverwrites: staffOverwrites(i.guild, i.client.user.id) })
+          .catch((e) => { throw new UserError(`Impossible de créer la catégorie (permission « Gérer les salons » ?) : ${e.message}`); });
+        lines.push(`📁 Catégorie **${cat.name}** créée (privée).`);
+      }
+      await setSetting(CATEGORY_KEY, cat.id);
+
+      // On range les salons des charbonniers déjà enregistrés (leurs permissions individuelles sont conservées)
+      let moved = 0;
+      for (const c of allCharbonniers().filter((x) => x.actif && x.channelId)) {
+        const ch = await i.guild.channels.fetch(c.channelId).catch(() => null);
+        if (ch && ch.parentId !== cat.id) {
+          await ch.setParent(cat.id, { lockPermissions: false }).then(() => moved++).catch(() => {});
+        }
+      }
+      if (moved) lines.push(`↪️ ${moved} salon(s) de charbonnier déplacé(s) dans la catégorie.`);
+    } else {
+      const cat = await charbonnierCategory(i.guild);
+      lines.push(cat ? `📁 Catégorie des charbonniers : **${cat.name}**.` : 'ℹ️ Aucune catégorie réglée : ajoute l\'option `categorie` pour en créer une.');
+    }
+    lines.push('Ajoute ensuite tes charbonniers avec `/charbonnier ajouter`.');
+    await i.editReply(lines.join('\n'));
   },
 };
 

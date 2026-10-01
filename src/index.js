@@ -4,6 +4,7 @@ import { setupHint } from './sheets.js';
 import { ensureStructure } from './setup.js';
 import { loadRegistry, findByChannel } from './charbonniers.js';
 import { loadPrices } from './prices.js';
+import { loadSettings } from './settings.js';
 import { parseQuantities } from './parse.js';
 import { commandDefs, handleInteraction, depositAndEmbed } from './commands.js';
 import { startSync } from './sync.js';
@@ -25,6 +26,7 @@ client.once(Events.ClientReady, async (c) => {
     if (created.length) console.log(`Onglets créés dans le Google Sheet : ${created.join(', ')}`);
     await loadRegistry();
     await loadPrices();
+    await loadSettings();
   } catch (e) {
     console.error(`❌ Accès au Google Sheet impossible : ${e.message}`);
     console.error(`   → ${setupHint()}`);

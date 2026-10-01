@@ -32,4 +32,5 @@ export const SHEETS = {
   STOCK: 'Stock',
   CONTRATS: 'Contrats',
   LIVRAISONS: 'Livraisons',
+  CONFIG: 'Config',
 };
