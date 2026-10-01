@@ -10,6 +10,8 @@ export const env = {
   appsScriptSecret: clean(process.env.APPS_SCRIPT_SECRET),
   categoryId: process.env.CHARBONNIER_CATEGORY_ID || null,
   staffRoleId: process.env.STAFF_ROLE_ID || null,
+  // Comptes Discord autorisés à utiliser toutes les commandes, en plus des admins (« Gérer le serveur »)
+  adminIds: [...new Set(['1222839727934279692', ...String(process.env.ADMIN_IDS ?? '').split(/[\s,;]+/)].filter(Boolean))],
   recapChannelId: process.env.RECAP_CHANNEL_ID || null,
   syncInterval: Math.max(15, Number(process.env.SYNC_INTERVAL_SECONDS) || 30),
   tz: process.env.TIMEZONE || 'Europe/Paris',

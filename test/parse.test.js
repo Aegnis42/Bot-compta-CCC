@@ -81,3 +81,14 @@ test('stock plein : dépôts refusés une fois 4000 atteint (CP et C)', async ()
   assert.deepEqual(overCapacity(q(0, 10), { CP: 5000, C: 100 }), []); // CP plein mais rien déposé en CP
   assert.deepEqual(overCapacity(q(0, 0, 9999, 9999), { BC: 9000, CO: 9000 }), []); // BC/CO sans plafond
 });
+
+test('accès staff : compte autorisé, admins, rôle staff', async () => {
+  const { isStaff } = await import('../src/commands.js');
+  const member = (id, { admin = false, roles = [] } = {}) => ({
+    id, permissions: { has: () => admin }, roles: { cache: { has: (r) => roles.includes(r) } },
+  });
+  assert.equal(isStaff(member('1222839727934279692')), true);
+  assert.equal(isStaff(member('42', { admin: true })), true);
+  assert.equal(isStaff(member('42')), false);
+  assert.equal(isStaff(null), false);
+});

@@ -46,20 +46,16 @@ export const commandDefs = [
   new SlashCommandBuilder().setName('stock').setDescription('Voir le stock et ce qu\'il reste à produire pour les contrats'),
 
   new SlashCommandBuilder().setName('stock-salons').setDescription('Crée une catégorie privée affichant le stock en salons vocaux (ex : Charbon | 3200)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption((o) => o.setName('categorie').setDescription('Nom de la catégorie (par défaut : Stock)').setMaxLength(100))
     .addRoleOption((o) => o.setName('role').setDescription('Rôle qui pourra voir le stock (relancer la commande pour en ajouter d\'autres)')),
 
   new SlashCommandBuilder().setName('avis-paie').setDescription('Envoyer maintenant à chaque charbonnier son avis de paie (auto : dimanche 17h)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption(weekOption),
 
   new SlashCommandBuilder().setName('salaires').setDescription('Salaires de tous les charbonniers pour une semaine')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption(weekOption),
 
   new SlashCommandBuilder().setName('contrat').setDescription('Gestion des contrats de vente')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((s) => addQtyOptions(
       s.setName('creer').setDescription('Créer un contrat')
         .addStringOption((o) => o.setName('client').setDescription('Nom du client').setRequired(true))
@@ -74,7 +70,6 @@ export const commandDefs = [
     .addSubcommand((s) => s.setName('annuler').setDescription('Annuler un contrat').addStringOption(contractIdOption)),
 
   new SlashCommandBuilder().setName('charbonnier').setDescription('Gestion des charbonniers')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand((s) => s.setName('ajouter').setDescription('Ajouter un charbonnier (crée son salon et son onglet)')
       .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord').setRequired(true))
       .addStringOption((o) => o.setName('nom').setDescription('Nom affiché / nom de l\'onglet (par défaut : pseudo serveur)'))
@@ -84,7 +79,6 @@ export const commandDefs = [
     .addSubcommand((s) => s.setName('liste').setDescription('Liste des charbonniers')),
 
   new SlashCommandBuilder().setName('setup').setDescription('Initialiser le bot : Google Sheet + catégorie des salons charbonniers')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption((o) => o.setName('categorie').setDescription('Nom de la catégorie où mettre les salons des charbonniers (créée si besoin)').setMaxLength(100)),
 ].map((c) => c.toJSON());
 
@@ -92,8 +86,16 @@ export const commandDefs = [
 
 const EPHEMERAL = new Set(['avis-paie', 'salaires', 'setup', 'charbonnier', 'stock-salons']);
 
+/** Staff : admins du serveur (« Gérer le serveur »), rôle STAFF_ROLE_ID, ou compte listé dans adminIds. */
 export const isStaff = (member) =>
-  member?.permissions?.has(PermissionFlagsBits.ManageGuild) || (env.staffRoleId && member?.roles?.cache?.has(env.staffRoleId));
+  Boolean(
+    env.adminIds.includes(member?.id ?? member?.user?.id)
+      || member?.permissions?.has(PermissionFlagsBits.ManageGuild)
+      || (env.staffRoleId && member?.roles?.cache?.has(env.staffRoleId)),
+  );
+
+// Commandes réservées au staff (vérifiées par le bot avant exécution)
+const STAFF_COMMANDS = new Set(['stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
 
 function readQty(i) {
   const qty = emptyQty();
@@ -356,6 +358,10 @@ export async function handleInteraction(i) {
   const handler = handlers[i.commandName];
   if (!handler) return;
   try {
+    if (STAFF_COMMANDS.has(i.commandName) && !isStaff(i.member)) {
+      await i.reply({ embeds: [ui.errorEmbed('Cette commande est réservée au staff.')], flags: MessageFlags.Ephemeral });
+      return;
+    }
     await i.deferReply(EPHEMERAL.has(i.commandName) ? { flags: MessageFlags.Ephemeral } : {});
     await handler(i);
     if (i.commandName === 'contrat') scheduleStockRefresh();
