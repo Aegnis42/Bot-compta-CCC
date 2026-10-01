@@ -1,10 +1,13 @@
 import 'dotenv/config';
 
+// Valeur nettoyée : espaces, retours à la ligne et guillemets collés par erreur (ex. dans Railway)
+const clean = (v) => String(v ?? '').trim().replace(/^(["'])(.*)\1$/, '$2').trim();
+
 export const env = {
-  token: process.env.DISCORD_TOKEN,
+  token: clean(process.env.DISCORD_TOKEN),
   guildId: process.env.DISCORD_GUILD_ID || '1555109924265005087',
-  appsScriptUrl: process.env.APPS_SCRIPT_URL || '',
-  appsScriptSecret: process.env.APPS_SCRIPT_SECRET || '',
+  appsScriptUrl: clean(process.env.APPS_SCRIPT_URL),
+  appsScriptSecret: clean(process.env.APPS_SCRIPT_SECRET),
   categoryId: process.env.CHARBONNIER_CATEGORY_ID || null,
   staffRoleId: process.env.STAFF_ROLE_ID || null,
   recapChannelId: process.env.RECAP_CHANNEL_ID || null,
