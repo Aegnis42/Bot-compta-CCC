@@ -49,7 +49,7 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 | `/depot cp: c: bc: co: [note] [membre]` | charbonnier (staff pour `membre`) | Déclarer un dépôt |
 | `/annuler-depot [ref] [membre]` | charbonnier / staff | Supprimer un dépôt (le dernier par défaut) |
 | `/recap [semaine] [membre]` | charbonnier | Dépôts et salaire de la semaine |
-| `/stock` | tous | Stock (avec niveau 🔒 🟢 🟠 🔴 pour CP et C), reste à livrer, à produire |
+| `/stock` | tous | Stock (avec niveau 🔒 🟢 🟠 🔴 pour CP et C), reste à livrer, à produire. Les dépôts de CP / C qui feraient dépasser 4000 sont refusés |
 | `/stock-salons [categorie] [role]` | staff | Catégorie privée avec un salon vocal par marchandise affichant le stock (`Charbon | 3200`), visible seulement par les rôles choisis. Les noms des salons vocaux suivent le stock dans la limite de Discord (2 renommages / 10 min par salon) ; le salon `📦-stock-en-direct` affiche un tableau mis à jour instantanément |
 | `/avis-paie [semaine]` | staff | Envoie tout de suite les avis de paie (sinon automatique le dimanche à 17h) |
 | `/salaires [semaine]` | staff | Salaires de tous les charbonniers |

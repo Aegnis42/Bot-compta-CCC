@@ -10,6 +10,7 @@ import { commandDefs, handleInteraction, depositAndEmbed } from './commands.js';
 import { startSync } from './sync.js';
 import { setStockClient } from './stockChannels.js';
 import * as ui from './ui.js';
+import { UserError } from './utils.js';
 
 if (!env.token) {
   console.error('❌ DISCORD_TOKEN manquant dans le fichier .env (voir .env.example)');
@@ -66,9 +67,9 @@ client.on(Events.MessageCreate, async (msg) => {
     await msg.react('✅').catch(() => {});
     await msg.reply({ embeds: [embed], allowedMentions: { repliedUser: false } });
   } catch (e) {
-    console.error('[message]', e);
-    await msg.react('❌').catch(() => {});
-    await msg.reply({ embeds: [ui.errorEmbed(`Dépôt non enregistré : ${e.message}`)] }).catch(() => {});
+    if (!(e instanceof UserError)) console.error('[message]', e);
+    await msg.react(e instanceof UserError ? '🔒' : '❌').catch(() => {});
+    await msg.reply({ embeds: [ui.errorEmbed(e instanceof UserError ? e.message : `Dépôt non enregistré : ${e.message}`)] }).catch(() => {});
   }
 });
 

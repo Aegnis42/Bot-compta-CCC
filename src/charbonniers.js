@@ -1,4 +1,5 @@
-import { env, PRODUCTS, SHEETS } from './config.js';
+import { env, PRODUCTS, SHEETS, STOCK_MAX, overCapacity } from './config.js';
+import { getStock } from './contrats.js';
 import * as gs from './sheets.js';
 import { COLS, SALAIRES_FIRST_ROW, weekFormula, salairesHeader } from './setup.js';
 import { toSheetSerial, weekOfSerial } from './time.js';
@@ -139,9 +140,24 @@ export function deactivateCharbonnier(c) {
 
 const tabRange = (c) => `${gs.q(c.tab)}!A2:J`;
 
-/** Enregistre un dépôt dans l'onglet du charbonnier. */
+const fmtN = (n) => Math.round(n).toLocaleString('fr-FR');
+
+/** Enregistre un dépôt dans l'onglet du charbonnier (refusé s'il fait dépasser le stock maximum). */
 export function recordDeposit(c, qty, { source = 'Discord', note = '' } = {}) {
   return gs.withLock(async () => {
+    // Vérifié sous le verrou : deux dépôts simultanés ne peuvent pas dépasser le plafond ensemble
+    const stock = Object.fromEntries(Object.entries(await getStock()).map(([code, s]) => [code, s.stock]));
+    const over = overCapacity(qty, stock);
+    if (over.length) {
+      const name = (code) => PRODUCTS.find((p) => p.code === code).name;
+      throw new UserError([
+        `🔒 **Dépôt refusé : le stock dépasserait le maximum de ${fmtN(STOCK_MAX)}.**`,
+        ...over.map((o) => o.room > 0
+          ? `• ${name(o.code)} (${o.code}) : ${fmtN(o.stock)} en stock, tu peux encore en déposer **${fmtN(o.room)}**.`
+          : `• ${name(o.code)} (${o.code}) : ${fmtN(o.stock)} en stock, plus aucun dépôt possible pour l'instant.`),
+        'Rien n\'a été enregistré : renvoie ton dépôt avec une quantité acceptée.',
+      ].join('\n'));
+    }
     const rows = await gs.read(tabRange(c), { unformatted: true });
     const row = lastDataRow(rows, [IDX.date, 2, 3, 4, 5, IDX.ref]) + 3;
     await gs.ensureRows(c.tab, row);

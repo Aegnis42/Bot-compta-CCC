@@ -11,7 +11,8 @@ export const qtyInline = (qty) => PRODUCTS.filter((p) => qty[p.code]).map((p) =>
 export const qtyLines = (qty) =>
   PRODUCTS.filter((p) => qty[p.code]).map((p) => `• **${fmt(qty[p.code])}** ${p.name} (${p.code})`).join('\n') || '—';
 
-export const errorEmbed = (msg) => new EmbedBuilder().setColor(COLORS.err).setDescription(`❌ ${msg}`);
+export const errorEmbed = (msg) =>
+  new EmbedBuilder().setColor(COLORS.err).setDescription(/^\p{Extended_Pictographic}/u.test(msg) ? msg : `❌ ${msg}`);
 
 export function depositEmbed({ c, qty, montant, ref, week, weekSum, title, color = COLORS.ok }) {
   return new EmbedBuilder()
