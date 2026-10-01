@@ -61,6 +61,14 @@ export function stockEmbed(stock) {
   return new EmbedBuilder().setColor(COLORS.info).setTitle('📦 Stock').setDescription(lines.join('\n')).setTimestamp();
 }
 
+export function contractsSummaryEmbed(open) {
+  const lines = open.slice(0, 20).map((ct) => {
+    const reste = Object.fromEntries(PRODUCTS.map((p) => [p.code, Math.max(0, ct.reste[p.code])]));
+    return `${STATUS_ICON[ct.statut] ?? ''} **${ct.id}** — ${ct.client} · reste : ${qtyInline(reste)}`;
+  });
+  return new EmbedBuilder().setColor(COLORS.warn).setTitle('📜 Contrats en cours').setDescription(lines.join('\n'));
+}
+
 const STATUS_ICON = { 'En attente': '🕓', Partiel: '🟠', Livré: '✅', Annulé: '⛔' };
 
 export function contractEmbed(ct, stock) {

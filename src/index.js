@@ -8,6 +8,7 @@ import { loadSettings } from './settings.js';
 import { parseQuantities } from './parse.js';
 import { commandDefs, handleInteraction, depositAndEmbed } from './commands.js';
 import { startSync } from './sync.js';
+import { setStockClient } from './stockChannels.js';
 import * as ui from './ui.js';
 
 if (!env.token) {
@@ -17,6 +18,8 @@ if (!env.token) {
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+  // Renommer un salon est limité par Discord (2 fois / 10 min) : on préfère une erreur immédiate à une attente silencieuse
+  rest: { rejectOnRateLimit: (d) => d.method === 'PATCH' && d.route.startsWith('/channels/') },
 });
 
 client.once(Events.ClientReady, async (c) => {
@@ -40,6 +43,7 @@ client.once(Events.ClientReady, async (c) => {
   }
   await guild.commands.set(commandDefs);
   console.log(`${commandDefs.length} commandes enregistrées sur « ${guild.name} »`);
+  setStockClient(client);
   startSync(client);
 });
 

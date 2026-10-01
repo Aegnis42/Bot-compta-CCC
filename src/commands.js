@@ -7,7 +7,7 @@ import { normalizeWeek, weekLabel } from './time.js';
 import { rachatValue, venteValue, loadPrices } from './prices.js';
 import { ensureStructure } from './setup.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
-import { setupStockChannels } from './stockChannels.js';
+import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
 import {
   allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, validateName,
   recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
@@ -137,6 +137,7 @@ const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().rep
 /** Enregistre un dépôt et renvoie l'embed de confirmation (partagé avec les messages texte). */
 export async function depositAndEmbed(c, qty, note) {
   const res = await recordDeposit(c, qty, { source: 'Discord', note });
+  scheduleStockRefresh();
   const weekSum = await weekSummary(c, res.week);
   return ui.depositEmbed({ c, qty, montant: rachatValue(qty), ref: res.ref, week: res.week, weekSum, title: '✅ Dépôt enregistré' });
 }
@@ -159,6 +160,7 @@ const handlers = {
     const c = resolveCharbonnier(i);
     if (c.discordId !== i.user.id && !isStaff(i.member)) throw new UserError('Tu ne peux annuler que tes propres dépôts.');
     const d = await deleteDeposit(c, i.options.getString('ref'));
+    scheduleStockRefresh();
     await i.editReply({
       embeds: [ui.depositEmbed({
         c, qty: d.qty, montant: d.montant, ref: d.ref, week: d.week || '?',
@@ -345,6 +347,7 @@ export async function handleInteraction(i) {
   try {
     await i.deferReply(EPHEMERAL.has(i.commandName) ? { flags: MessageFlags.Ephemeral } : {});
     await handler(i);
+    if (i.commandName === 'contrat') scheduleStockRefresh();
   } catch (e) {
     if (!(e instanceof UserError)) console.error(`[/${i.commandName}]`, e);
     const msg = e instanceof UserError ? e.message : `Erreur inattendue : ${e.message}`;
