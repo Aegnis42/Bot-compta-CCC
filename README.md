@@ -66,20 +66,30 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 2. Toujours dans **Bot**, activer **Message Content Intent**.
 3. **OAuth2 → URL Generator** : scopes `bot` + `applications.commands`, permissions : *Gérer les salons*, *Gérer les rôles*, *Voir les salons*, *Envoyer des messages*, *Intégrer des liens*, *Ajouter des réactions*, *Lire l'historique*. Ouvrir l'URL et inviter le bot sur le serveur.
 
-### 2. Accès Google Sheets
-1. <https://console.cloud.google.com/> → créer un projet → **API et services → Bibliothèque** → activer **Google Sheets API**.
-2. **Identifiants → Créer → Compte de service** → onglet *Clés* → *Ajouter une clé* → JSON. Enregistrer le fichier sous `service-account.json` à la racine du projet (il est ignoré par git, **ne jamais le committer**).
-3. Ouvrir le Google Sheet → **Partager** → ajouter l'adresse e-mail du compte de service (`...@...iam.gserviceaccount.com`) en **Éditeur**.
+### 2. Relier le Google Sheet (Apps Script)
+Le bot passe par un petit script installé directement dans votre Google Sheet : pas besoin de console Google Cloud.
+
+1. Dans le Google Sheet : **Extensions → Apps Script**.
+2. Effacer le contenu de `Code.gs` et coller celui de [apps-script/Code.gs](apps-script/Code.gs).
+3. Remplacer `'A_REMPLACER'` (ligne `const SECRET`) par la valeur de `APPS_SCRIPT_SECRET` du `.env` (un mot de passe long et aléatoire, à garder secret).
+4. Dans la colonne de gauche : **Services (+) → Google Sheets API → Ajouter**.
+5. **Enregistrer** (icône disquette), puis **Déployer → Nouveau déploiement** → roue dentée → **Application Web** :
+   - *Exécuter en tant que* : **Moi**
+   - *Qui a accès* : **Tout le monde** (le secret empêche quiconque d'autre de s'en servir)
+6. **Déployer** → **Autoriser l'accès** → choisir votre compte Google → *Paramètres avancés → Accéder au projet (non sécurisé)* → Autoriser. (Google affiche cet avertissement pour tout script personnel non vérifié.)
+7. Copier l'**URL de l'application Web** (`https://script.google.com/macros/s/.../exec`) dans `APPS_SCRIPT_URL` du `.env`.
+
+Si vous modifiez le script plus tard : **Déployer → Gérer les déploiements → ✏️ → Version : Nouvelle version** (l'URL reste la même).
 
 ### 3. Lancer
 ```bash
 npm install
-cp .env.example .env   # puis remplir DISCORD_TOKEN (le reste est déjà prérempli)
+cp .env.example .env   # puis remplir DISCORD_TOKEN, APPS_SCRIPT_URL et APPS_SCRIPT_SECRET
 npm start
 ```
 Au démarrage, le bot crée les onglets et enregistre les commandes sur le serveur. Ensuite : `/charbonnier ajouter @membre` pour chaque charbonnier.
 
-Pour qu'il tourne en permanence, l'héberger sur un VPS / Raspberry Pi (avec `pm2`) ou un hébergeur Node (Railway, Fly.io…). Sur un hébergeur, mettre le contenu du JSON dans `GOOGLE_SERVICE_ACCOUNT_JSON` au lieu du fichier.
+Pour qu'il tourne en permanence, l'héberger sur un VPS / Raspberry Pi (avec `pm2`) ou un hébergeur Node (Railway, Fly.io…).
 
 ### Options (`.env`)
 - `CHARBONNIER_CATEGORY_ID` : catégorie où créer les salons des charbonniers.

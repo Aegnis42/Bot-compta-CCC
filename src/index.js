@@ -1,6 +1,6 @@
 import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { env } from './config.js';
-import { serviceAccountEmail } from './sheets.js';
+import { setupHint } from './sheets.js';
 import { ensureStructure } from './setup.js';
 import { loadRegistry, findByChannel } from './charbonniers.js';
 import { loadPrices } from './prices.js';
@@ -27,7 +27,7 @@ client.once(Events.ClientReady, async (c) => {
     await loadPrices();
   } catch (e) {
     console.error(`❌ Accès au Google Sheet impossible : ${e.message}`);
-    console.error(`   → Vérifie que le Sheet est partagé en "Éditeur" avec ${serviceAccountEmail()}`);
+    console.error(`   → ${setupHint()}`);
     process.exit(1);
   }
   const guild = await c.guilds.fetch(env.guildId);

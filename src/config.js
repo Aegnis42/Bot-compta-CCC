@@ -3,9 +3,8 @@ import 'dotenv/config';
 export const env = {
   token: process.env.DISCORD_TOKEN,
   guildId: process.env.DISCORD_GUILD_ID || '1555109924265005087',
-  spreadsheetId: process.env.SPREADSHEET_ID || '1ojju2xdH6aWTYVFs0txph029TodFCJ_gjEb_906_Qlg',
-  googleKeyFile: process.env.GOOGLE_SERVICE_ACCOUNT_FILE || './service-account.json',
-  googleKeyJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '',
+  appsScriptUrl: process.env.APPS_SCRIPT_URL || '',
+  appsScriptSecret: process.env.APPS_SCRIPT_SECRET || '',
   categoryId: process.env.CHARBONNIER_CATEGORY_ID || null,
   staffRoleId: process.env.STAFF_ROLE_ID || null,
   recapChannelId: process.env.RECAP_CHANNEL_ID || null,

@@ -3,3 +3,4 @@ node_modules/
 service-account*.json
 *-credentials.json
 data/
+apps-script/*.local.gs

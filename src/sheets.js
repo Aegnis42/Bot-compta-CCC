@@ -1,35 +1,42 @@
-import fs from 'node:fs';
-import { google } from 'googleapis';
 import { env } from './config.js';
 
-function credentials() {
-  if (env.googleKeyJson) return JSON.parse(env.googleKeyJson);
-  if (!fs.existsSync(env.googleKeyFile)) {
-    throw new Error(`Fichier du compte de service Google introuvable : ${env.googleKeyFile} (voir README)`);
+/**
+ * Tout passe par le script Apps Script installé dans le Google Sheet (apps-script/Code.gs),
+ * qui relaie les appels vers l'API Google Sheets.
+ */
+async function call(op, args) {
+  if (!env.appsScriptUrl || !env.appsScriptSecret) {
+    throw new Error('APPS_SCRIPT_URL ou APPS_SCRIPT_SECRET manquant dans le .env (voir README)');
   }
-  return JSON.parse(fs.readFileSync(env.googleKeyFile, 'utf8'));
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(env.appsScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: env.appsScriptSecret, op, args }),
+        redirect: 'follow',
+      });
+      const text = await res.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new Error(`Réponse inattendue du script Apps Script (HTTP ${res.status}). Le déploiement est-il bien en accès "Tout le monde" ?`);
+      }
+      if (!json.ok) throw Object.assign(new Error(json.error), { fatal: true });
+      return json.data ?? {};
+    } catch (e) {
+      lastErr = e;
+      if (e.fatal) break;
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
 }
 
-let api;
-let creds;
-function sheets() {
-  if (!api) {
-    creds = credentials();
-    const auth = new google.auth.GoogleAuth({ credentials: creds, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
-    api = google.sheets({ version: 'v4', auth });
-  }
-  return api;
-}
-
-export const serviceAccountEmail = () => {
-  try {
-    return (creds ?? credentials()).client_email;
-  } catch {
-    return '(compte de service)';
-  }
-};
-
-const ID = env.spreadsheetId;
+export const setupHint = () =>
+  'Vérifie APPS_SCRIPT_URL / APPS_SCRIPT_SECRET dans le .env et que le script Apps Script est déployé (voir README).';
 
 /** Nom d'onglet utilisable dans une plage A1 : 'Mon onglet' */
 export const q = (title) => `'${String(title).replace(/'/g, "''")}'`;
@@ -37,13 +44,10 @@ export const q = (title) => `'${String(title).replace(/'/g, "''")}'`;
 let metaCache = null;
 export async function getMeta(force = false) {
   if (metaCache && !force) return metaCache;
-  const res = await sheets().spreadsheets.get({
-    spreadsheetId: ID,
-    fields: 'properties(title,timeZone),sheets(properties(sheetId,title,gridProperties))',
-  });
+  const data = await call('meta', { fields: 'properties(title,timeZone),sheets(properties(sheetId,title,gridProperties))' });
   metaCache = {
-    properties: res.data.properties,
-    sheets: new Map(res.data.sheets.map((s) => [s.properties.title, s.properties])),
+    properties: data.properties,
+    sheets: new Map(data.sheets.map((s) => [s.properties.title, s.properties])),
   };
   return metaCache;
 }
@@ -60,38 +64,33 @@ const readOpts = (unformatted) => ({
 });
 
 export async function read(range, { unformatted = false } = {}) {
-  const res = await sheets().spreadsheets.values.get({ spreadsheetId: ID, range, ...readOpts(unformatted) });
-  return res.data.values ?? [];
+  const data = await call('get', { range, options: readOpts(unformatted) });
+  return data.values ?? [];
 }
 
 export async function readMany(ranges, { unformatted = false } = {}) {
   if (!ranges.length) return [];
-  const res = await sheets().spreadsheets.values.batchGet({ spreadsheetId: ID, ranges, ...readOpts(unformatted) });
-  return res.data.valueRanges.map((vr) => vr.values ?? []);
+  const data = await call('batchGet', { ranges, options: readOpts(unformatted) });
+  return data.valueRanges.map((vr) => vr.values ?? []);
 }
 
 /** raw=true : les valeurs sont écrites telles quelles (pas de formule, pas d'interprétation). */
 export async function write(range, values, raw = true) {
-  await sheets().spreadsheets.values.update({
-    spreadsheetId: ID, range, valueInputOption: raw ? 'RAW' : 'USER_ENTERED', requestBody: { values },
-  });
+  await call('update', { range, values, valueInputOption: raw ? 'RAW' : 'USER_ENTERED' });
 }
 
 export async function writeMany(data, raw = true) {
   if (!data.length) return;
-  await sheets().spreadsheets.values.batchUpdate({
-    spreadsheetId: ID, requestBody: { valueInputOption: raw ? 'RAW' : 'USER_ENTERED', data },
-  });
+  await call('batchUpdateValues', { data, valueInputOption: raw ? 'RAW' : 'USER_ENTERED' });
 }
 
 export async function clear(range) {
-  await sheets().spreadsheets.values.clear({ spreadsheetId: ID, range });
+  await call('clear', { range });
 }
 
 export async function batchUpdate(requests) {
   if (!requests.length) return null;
-  const res = await sheets().spreadsheets.batchUpdate({ spreadsheetId: ID, requestBody: { requests } });
-  return res.data;
+  return call('batchUpdate', { requests });
 }
 
 /** S'assure que l'onglet a au moins `row` lignes. */
