@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import { env } from './config.js';
 import * as gs from './sheets.js';
 import { toSheetSerial, weekOfSerial, weekLabel, previousWeekLabel } from './time.js';
@@ -8,7 +7,7 @@ import {
   loadRegistry, activeCharbonniers, allCharbonniers, readTabs, weekSummary, salariesForWeek, ensureTab, rebuildFormulas, IDX,
 } from './charbonniers.js';
 import * as ui from './ui.js';
-import { loadSettings } from './settings.js';
+import { loadSettings, getSetting, setSetting } from './settings.js';
 import { updateStockChannels } from './stockChannels.js';
 
 // ---------- Google Sheet → Discord ----------
@@ -75,34 +74,22 @@ async function syncRegistry() {
 
 // ---------- Récap hebdomadaire ----------
 
-const STATE_FILE = new URL('../data/state.json', import.meta.url);
-function loadState() {
-  try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-  } catch {
-    return {};
-  }
-}
-function saveState(state) {
-  fs.mkdirSync(new URL('.', STATE_FILE), { recursive: true });
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
-}
-
 /** Le lundi (changement de semaine), poste les salaires de la semaine écoulée dans RECAP_CHANNEL_ID. */
 async function weeklyRecap(client) {
   if (!env.recapChannelId) return;
-  const state = loadState();
+  // Mémorisé dans l'onglet Config du Sheet pour survivre aux redémarrages / redéploiements
+  const last = getSetting('dernier_recap_salaires');
   const prev = previousWeekLabel();
-  if (!state.lastRecap) {
+  if (!last) {
     // Premier démarrage : on ne poste pas tout de suite, on attend la prochaine fin de semaine
-    saveState({ ...state, lastRecap: prev });
+    await setSetting('dernier_recap_salaires', prev);
     return;
   }
-  if (state.lastRecap === prev) return;
+  if (last === prev) return;
   const channel = await client.channels.fetch(env.recapChannelId).catch(() => null);
   if (!channel) return;
   await channel.send({ content: `📅 Fin de la semaine **${prev}** — salaires à verser :`, embeds: [ui.salairesEmbed(prev, await salariesForWeek(prev))] });
-  saveState({ ...state, lastRecap: prev });
+  await setSetting('dernier_recap_salaires', prev);
 }
 
 // ---------- Boucle ----------
@@ -116,8 +103,8 @@ export function startSync(client) {
       await syncRegistry();
       await loadPrices();
       await syncSheetToDiscord(client);
-      await weeklyRecap(client);
       await loadSettings();
+      await weeklyRecap(client);
       await updateStockChannels(client);
     } catch (e) {
       console.error('[sync]', e.message);
