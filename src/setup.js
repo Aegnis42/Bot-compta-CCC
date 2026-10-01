@@ -17,7 +17,16 @@ export const COLS = {
 // Ligne de début des données dans "Salaires"
 export const SALAIRES_FIRST_ROW = 5;
 
-const CURRENT_WEEK = 'YEAR(TODAY()-WEEKDAY(TODAY(),2)+4)&"-S"&TEXT(ISOWEEKNUM(TODAY()),"00")';
+/** Formule donnant la semaine (lundi → dimanche) contenant la date `d` : "28/09/2026 au 04/10/2026". */
+export const weekFormula = (d) =>
+  `TEXT(INT(${d})-WEEKDAY(${d},2)+1,"dd/mm/yyyy")&" au "&TEXT(INT(${d})-WEEKDAY(${d},2)+7,"dd/mm/yyyy")`;
+
+/** En-tête de l'onglet Salaires (hors B1, saisi par l'utilisateur). */
+export const salairesHeader = () => ({
+  A1: [['Semaine à afficher']],
+  C1: [['← une date de la semaine voulue (ex : 29/09/2026), ou vide pour la semaine en cours']],
+  A2: [['Semaine affichée', `=IF(B1="",${weekFormula('TODAY()')},IFERROR(${weekFormula('B1')},"Date invalide en B1"))`]],
+});
 
 /** Prix de vente de la ligne i selon le tarif contenu dans `tarifExpr`. */
 const sellPrice = (i, tarifExpr) => `IF(REGEXMATCH(LOWER(${tarifExpr}),"chat"),${P}!$E$${i + 2},${P}!$D$${i + 2})`;
@@ -38,10 +47,8 @@ const INIT = {
 
   async [SHEETS.SALAIRES](sheetId) {
     const S = gs.q(SHEETS.SALAIRES);
-    await gs.write(`${S}!A1:C2`, [
-      ['Semaine à afficher', '', '← laisser vide pour la semaine en cours, ou taper par ex. 2026-S39'],
-      ['Semaine affichée', `=IF(B1="",${CURRENT_WEEK},UPPER(TRIM(B1)))`, ''],
-    ], false);
+    const h = salairesHeader();
+    await gs.writeMany(Object.entries(h).map(([cell, values]) => ({ range: `${S}!${cell}`, values })), false);
     await gs.write(`${S}!A4:G4`, [['Charbonnier', ...PRODUCTS.map((p) => p.code), `Salaire dû (${env.currency})`, 'Statut']]);
     return [
       gs.headerFormat(sheetId, 3),

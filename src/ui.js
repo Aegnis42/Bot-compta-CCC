@@ -20,8 +20,8 @@ export function depositEmbed({ c, qty, montant, ref, week, weekSum, title, color
     .setDescription(qtyLines(qty))
     .addFields(
       { name: 'Valeur de rachat', value: money(montant), inline: true },
-      { name: 'Semaine', value: week, inline: true },
-      { name: `Total de la semaine ${week}`, value: `${qtyInline(weekSum.qty)}\n💰 **${money(weekSum.montant)}** à percevoir` },
+      { name: 'Semaine', value: `du ${week}`, inline: true },
+      { name: 'Total de la semaine', value: `${qtyInline(weekSum.qty)}\n💰 **${money(weekSum.montant)}** à percevoir` },
     )
     .setFooter({ text: `${c.name} · Réf ${ref}` })
     .setTimestamp();
@@ -30,7 +30,7 @@ export function depositEmbed({ c, qty, montant, ref, week, weekSum, title, color
 export function recapEmbed(c, week, sum) {
   return new EmbedBuilder()
     .setColor(COLORS.info)
-    .setTitle(`📊 ${c.name} — semaine ${week}`)
+    .setTitle(`📊 ${c.name} — semaine du ${week}`)
     .setDescription(sum.count ? qtyLines(sum.qty) : '_Aucun dépôt cette semaine._')
     .addFields(
       { name: 'Dépôts', value: String(sum.count), inline: true },
@@ -45,7 +45,7 @@ export function salairesEmbed(week, list) {
     .map((s) => `**${s.c.name}**${s.c.discordId ? ` (<@${s.c.discordId}>)` : ''} — ${qtyInline(s.qty)} → **${money(s.montant)}**`);
   return new EmbedBuilder()
     .setColor(COLORS.coal)
-    .setTitle(`💰 Salaires — semaine ${week}`)
+    .setTitle(`💰 Salaires — semaine du ${week}`)
     .setDescription(lines.join('\n') || '_Aucun charbonnier._')
     .addFields({ name: 'Total à verser', value: `**${money(total)}**` });
 }

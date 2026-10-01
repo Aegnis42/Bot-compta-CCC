@@ -15,35 +15,45 @@ export function toSheetSerial(date = new Date()) {
   return Date.UTC(p.y, p.m - 1, p.d, p.h, p.min, p.s) / 86400000 + 25569;
 }
 
-function isoWeekFromYMD(y, m, d) {
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  const day = dt.getUTCDay() || 7;
-  dt.setUTCDate(dt.getUTCDate() + 4 - day);
-  const yearStart = Date.UTC(dt.getUTCFullYear(), 0, 1);
-  const week = Math.ceil(((dt - yearStart) / 86400000 + 1) / 7);
-  return `${dt.getUTCFullYear()}-S${String(week).padStart(2, '0')}`;
+const ddmmyyyy = (dt) =>
+  `${String(dt.getUTCDate()).padStart(2, '0')}/${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${dt.getUTCFullYear()}`;
+
+/** Semaine (lundi → dimanche) contenant ce jour, au format "28/09/2026 au 04/10/2026" (identique à la formule du Sheet). */
+function weekFromYMD(y, m, d) {
+  const monday = new Date(Date.UTC(y, m - 1, d));
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() || 7) - 1));
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return `${ddmmyyyy(monday)} au ${ddmmyyyy(sunday)}`;
 }
 
-/** Semaine ISO au format "2026-S40" (identique à la formule du Sheet). */
 export function weekLabel(date = new Date()) {
   const p = localParts(date);
-  return isoWeekFromYMD(p.y, p.m, p.d);
+  return weekFromYMD(p.y, p.m, p.d);
 }
 
 export function weekOfSerial(serial) {
-  const d = new Date(Math.round((serial - 25569) * 86400000));
-  return isoWeekFromYMD(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  const d = new Date(Math.floor(serial - 25569) * 86400000);
+  return weekFromYMD(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
 }
 
 export const previousWeekLabel = () => weekLabel(new Date(Date.now() - 7 * 86400000));
 
-/** Accepte "2026-S40", "2026-40", "S40" ou "40". Renvoie null si invalide. */
+/**
+ * Semaine choisie par l'utilisateur : n'importe quel jour de la semaine ("29/09", "29/09/2026", "29-09-26"),
+ * "derniere" pour la semaine précédente, ou vide pour la semaine en cours. Renvoie null si invalide.
+ */
 export function normalizeWeek(input) {
-  if (!input) return weekLabel();
-  const s = String(input).trim().toUpperCase();
-  let m = s.match(/^(\d{4})\s*-?\s*S?\s*(\d{1,2})$/);
-  if (m) return `${m[1]}-S${m[2].padStart(2, '0')}`;
-  m = s.match(/^S?\s*(\d{1,2})$/);
-  if (m) return `${weekLabel().slice(0, 4)}-S${m[1].padStart(2, '0')}`;
-  return null;
+  if (!input || !String(input).trim()) return weekLabel();
+  const s = String(input).trim().toLowerCase();
+  if (/^(derni[eè]re|pr[eé]c[eé]dente)$/.test(s)) return previousWeekLabel();
+  const m = s.match(/^(\d{1,2})[/.-](\d{1,2})(?:[/.-](\d{2}|\d{4}))?(?:\s*au\s.*)?$/);
+  if (!m) return null;
+  const day = +m[1];
+  const month = +m[2];
+  let year = m[3] ? +m[3] : localParts().y;
+  if (year < 100) year += 2000;
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  if (dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) return null;
+  return weekFromYMD(year, month, day);
 }

@@ -88,7 +88,7 @@ async function weeklyRecap(client) {
   if (last === prev) return;
   const channel = await client.channels.fetch(env.recapChannelId).catch(() => null);
   if (!channel) return;
-  await channel.send({ content: `📅 Fin de la semaine **${prev}** — salaires à verser :`, embeds: [ui.salairesEmbed(prev, await salariesForWeek(prev))] });
+  await channel.send({ content: `📅 Semaine du **${prev}** terminée — salaires à verser :`, embeds: [ui.salairesEmbed(prev, await salariesForWeek(prev))] });
   await setSetting('dernier_recap_salaires', prev);
 }
 

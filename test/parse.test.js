@@ -26,10 +26,18 @@ test("pièges", () => {
 });
 
 test('semaines', () => {
-  assert.equal(normalizeWeek('2026-S40'), '2026-S40');
-  assert.equal(normalizeWeek('2026-4'), '2026-S04');
-  assert.match(normalizeWeek('7'), /^\d{4}-S07$/);
+  assert.equal(normalizeWeek('01/10/2026'), '28/09/2026 au 04/10/2026');
+  assert.equal(normalizeWeek('28/09/26'), '28/09/2026 au 04/10/2026');
+  assert.equal(normalizeWeek('04/10/2026'), '28/09/2026 au 04/10/2026');
+  assert.equal(normalizeWeek('05/10/2026'), '05/10/2026 au 11/10/2026');
+  assert.equal(normalizeWeek('01/01/2027'), '28/12/2026 au 03/01/2027');
+  assert.equal(normalizeWeek('31/02/2026'), null);
   assert.equal(normalizeWeek('abc'), null);
+});
+
+test("semaine d'un numéro de série Sheets", async () => {
+  const { weekOfSerial } = await import('../src/time.js');
+  assert.equal(weekOfSerial(46296.6), '28/09/2026 au 04/10/2026'); // jeudi 01/10/2026 14h24
 });
 
 test('formules en paramètres régionaux français', async () => {

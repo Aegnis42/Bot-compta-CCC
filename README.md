@@ -29,7 +29,7 @@ Le bot crée tout seul les onglets au premier démarrage (il ne touche pas aux o
 | `Prix` | Prix de rachat et de vente (modifiables) |
 | `Charbonniers` | Nom, ID Discord, ID du salon, onglet, actif (OUI/NON) |
 | `<Nom du charbonnier>` | Un onglet par charbonnier : Date, Semaine, CP, C, BC, CO, Montant, Source, Réf, Note |
-| `Salaires` | Salaire dû par charbonnier pour la semaine choisie en **B1** (vide = semaine en cours) |
+| `Salaires` | Salaire dû par charbonnier pour la semaine contenant la date saisie en **B1** (vide = semaine en cours) |
 | `Stock` | Déposé, ajustement manuel (colonne D), livré, stock actuel, reste à livrer, à produire |
 | `Contrats` | ID, client, tarif, quantités commandées / livrées / restantes, montants, statut |
 | `Livraisons` | Historique des livraisons de contrats |
@@ -38,7 +38,7 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 
 **Ajouter un dépôt à la main** dans l'onglet d'un charbonnier : remplir la date (facultatif) et les quantités sur une nouvelle ligne, laisser `Réf` vide. Le bot complète la ligne et prévient le charbonnier sur Discord.
 
-**Semaines** : du lundi au dimanche, notées `2026-S40`.
+**Semaines** : du lundi au dimanche, notées `28/09/2026 au 04/10/2026`. Dans les commandes, l'option `semaine` accepte n'importe quel jour de la semaine (`29/09`) ou `derniere`.
 
 ## Commandes Discord
 

@@ -25,7 +25,7 @@ const addQtyOptions = (b) => {
   }
   return b;
 };
-const weekOption = (o) => o.setName('semaine').setDescription('Semaine, ex : 2026-S40 ou 40 (par défaut : semaine en cours)');
+const weekOption = (o) => o.setName('semaine').setDescription('Un jour de la semaine voulue, ex : 29/09 ou "derniere" (par défaut : semaine en cours)');
 const memberOption = (o) => o.setName('membre').setDescription('(Staff) Le charbonnier concerné');
 const contractIdOption = (o) => o.setName('id').setDescription('ID du contrat (ex : CT-001)').setRequired(true).setAutocomplete(true);
 
@@ -111,7 +111,7 @@ function resolveCharbonnier(i) {
 
 function weekFrom(i) {
   const week = normalizeWeek(i.options.getString('semaine'));
-  if (!week) throw new UserError('Semaine invalide. Format attendu : `2026-S40` ou `40`.');
+  if (!week) throw new UserError('Semaine invalide. Donne un jour de la semaine, ex : `29/09` ou `29/09/2026`, ou `derniere`.');
   return week;
 }
 

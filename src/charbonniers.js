@@ -1,6 +1,6 @@
 import { env, PRODUCTS, SHEETS } from './config.js';
 import * as gs from './sheets.js';
-import { COLS, SALAIRES_FIRST_ROW } from './setup.js';
+import { COLS, SALAIRES_FIRST_ROW, weekFormula, salairesHeader } from './setup.js';
 import { toSheetSerial, weekOfSerial } from './time.js';
 import { UserError, num, qtyFrom, emptyQty, addQty, lastDataRow, newRef, round2 } from './utils.js';
 
@@ -45,7 +45,7 @@ export async function loadRegistry() {
 function tabHeader() {
   const P = gs.q(SHEETS.PRIX);
   const [c1, c2, c3, c4] = COLS.depot;
-  const week = '={"Semaine";ARRAYFORMULA(IF(A2:A="","",IFERROR(YEAR(A2:A-WEEKDAY(A2:A,2)+4)&"-S"&TEXT(ISOWEEKNUM(A2:A),"00"),"?")))}';
+  const week = `={"Semaine";ARRAYFORMULA(IF(A2:A="","",IFERROR(${weekFormula('A2:A')},"?")))}`;
   const sum = COLS.depot.map((col, i) => `${col}2:${col}*${P}!$C$${i + 2}`).join('+');
   const montant = `={"Montant (${env.currency})";ARRAYFORMULA(IF(LEN(A2:A&${c1}2:${c1}&${c2}2:${c2}&${c3}2:${c3}&${c4}2:${c4})=0,"",IFERROR(ROUND(${sum},2),"?")))}`;
   return ['Date', week, ...PRODUCTS.map((p) => p.code), montant, 'Source', 'Réf', 'Note'];
@@ -87,6 +87,12 @@ export async function rebuildFormulas() {
   const total = rows.length
     ? ['TOTAL', ...['B', 'C', 'D', 'E', 'F'].map((col) => `=SUM(${col}${first}:${col}${last})`), '']
     : ['TOTAL', 0, 0, 0, 0, 0, ''];
+
+  // Formules de semaine (remises à jour à chaque fois : corrige les onglets créés avec un ancien format)
+  await gs.writeMany([
+    ...list.map((c) => ({ range: `${gs.q(c.tab)}!B1`, values: [[tabHeader()[1]]] })),
+    ...Object.entries(salairesHeader()).map(([cell, values]) => ({ range: `${S}!${cell}`, values })),
+  ], false);
 
   await gs.clear(`${S}!A${first}:G`);
   await gs.write(`${S}!A${first}:G${first + rows.length}`, [...rows, total], false);
