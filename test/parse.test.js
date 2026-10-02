@@ -92,3 +92,10 @@ test('accès staff : compte autorisé, admins, rôle staff', async () => {
   assert.equal(isStaff(member('42')), false);
   assert.equal(isStaff(null), false);
 });
+
+test('valeur de rachat avec bonus par unité', async () => {
+  const { rachatValue } = await import('../src/prices.js');
+  assert.equal(rachatValue({ CP: 300, C: 0, BC: 0, CO: 0 }), 180); // 300 × 0,6
+  assert.equal(rachatValue({ CP: 300, C: 0, BC: 0, CO: 0 }, 0.1), 210); // 300 × 0,7
+  assert.equal(rachatValue({ CP: 0, C: 100, BC: 10, CO: 1 }, 0.1), 152.3); // 100×1,3 + 10×1,9 + 1×3,3
+});

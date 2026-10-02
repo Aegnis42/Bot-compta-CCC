@@ -1,7 +1,7 @@
 import { env, PAIE } from './config.js';
 import * as gs from './sheets.js';
 import { toSheetSerial, weekOfSerial, weekLabel, localClock } from './time.js';
-import { qtyFrom, hasQty, newRef } from './utils.js';
+import { qtyFrom, hasQty, newRef, num } from './utils.js';
 import { loadPrices, rachatValue } from './prices.js';
 import {
   loadRegistry, activeCharbonniers, allCharbonniers, readTabs, weekSummary, salariesForWeek, ensureTab, rebuildFormulas, IDX,
@@ -38,7 +38,11 @@ async function syncSheetToDiscord(client) {
         }
         const ref = newRef('S');
         writes.push({ range: `${t}!H${row}:I${row}`, values: [[r[IDX.source] || 'Google Sheet', ref]] });
-        found.push({ c, qty, ref, week });
+        // Bonus figé sur la ligne, comme pour un dépôt Discord (sauf s'il a été saisi à la main)
+        const bonusCell = r[IDX.bonus];
+        const bonus = bonusCell === undefined || bonusCell === '' ? c.bonus : num(bonusCell);
+        if ((bonusCell === undefined || bonusCell === '') && c.bonus) writes.push({ range: `${t}!K${row}`, values: [[c.bonus]] });
+        found.push({ c, qty, ref, week, bonus });
       });
     }
     await gs.writeMany(writes);
@@ -51,7 +55,7 @@ async function syncSheetToDiscord(client) {
     const weekSum = await weekSummary(p.c, p.week);
     await channel.send({
       embeds: [ui.depositEmbed({
-        c: p.c, qty: p.qty, montant: rachatValue(p.qty), ref: p.ref, week: p.week, weekSum,
+        c: p.c, qty: p.qty, montant: rachatValue(p.qty, p.bonus), ref: p.ref, week: p.week, weekSum,
         title: '📄 Dépôt ajouté depuis le Google Sheet', color: ui.COLORS.sheet,
       })],
     }).catch((e) => console.warn(`[sync] envoi impossible dans le salon de ${p.c.name} :`, e.message));

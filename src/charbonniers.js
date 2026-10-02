@@ -1,4 +1,4 @@
-import { env, PRODUCTS, SHEETS, STOCK_MAX, overCapacity } from './config.js';
+import { env, PRODUCTS, SHEETS, STOCK_MAX, BONUS_RACHAT, overCapacity } from './config.js';
 import { getStock } from './contrats.js';
 import * as gs from './sheets.js';
 import { COLS, SALAIRES_FIRST_ROW, weekFormula, salairesHeader } from './setup.js';
@@ -7,7 +7,9 @@ import { UserError, num, qtyFrom, emptyQty, addQty, lastDataRow, newRef, round2 
 
 // Colonnes d'un onglet charbonnier :
 // A Date | B Semaine (formule) | C CP | D C | E BC | F CO | G Montant (formule) | H Source | I Réf | J Note
-export const IDX = { date: 0, week: 1, qty: 2, montant: 6, source: 7, ref: 8, note: 9 };
+// | K Bonus rachat par unité, figé au moment du dépôt (changer le bonus ne modifie pas les dépôts passés)
+export const IDX = { date: 0, week: 1, qty: 2, montant: 6, source: 7, ref: 8, note: 9, bonus: 10 };
+const TAB_COLUMNS = 11;
 
 const RESERVED = Object.values(SHEETS).map((s) => s.toLowerCase());
 const NAME_RE = /^\p{L}[\p{L}\p{N} _'.-]{0,29}$/u;
@@ -29,7 +31,7 @@ export function validateName(name) {
 
 /** Relit l'onglet "Charbonniers". */
 export async function loadRegistry() {
-  const rows = await gs.read(`${gs.q(SHEETS.CHARBONNIERS)}!A2:F`);
+  const rows = await gs.read(`${gs.q(SHEETS.CHARBONNIERS)}!A2:G`, { unformatted: true });
   registry = rows
     .map((r, i) => ({
       name: String(r[0] ?? '').trim(),
@@ -37,6 +39,8 @@ export async function loadRegistry() {
       channelId: String(r[2] ?? '').trim(),
       tab: String(r[3] ?? '').trim() || String(r[0] ?? '').trim(),
       actif: !/^(non|no|false|0)$/i.test(String(r[4] ?? 'OUI').trim()),
+      bonus: num(r[6]),
+      bonusSet: r[6] !== undefined && r[6] !== '',
       row: i + 2,
     }))
     .filter((c) => c.name);
@@ -48,17 +52,18 @@ function tabHeader() {
   const [c1, c2, c3, c4] = COLS.depot;
   const week = `={"Semaine";ARRAYFORMULA(IF(A2:A="","",IFERROR(${weekFormula('A2:A')},"?")))}`;
   const sum = COLS.depot.map((col, i) => `${col}2:${col}*${P}!$C$${i + 2}`).join('+');
-  const montant = `={"Montant (${env.currency})";ARRAYFORMULA(IF(LEN(A2:A&${c1}2:${c1}&${c2}2:${c2}&${c3}2:${c3}&${c4}2:${c4})=0,"",IFERROR(ROUND(${sum},2),"?")))}`;
-  return ['Date', week, ...PRODUCTS.map((p) => p.code), montant, 'Source', 'Réf', 'Note'];
+  const bonus = `(${COLS.depot.map((col) => `${col}2:${col}`).join('+')})*K2:K`;
+  const montant = `={"Montant (${env.currency})";ARRAYFORMULA(IF(LEN(A2:A&${c1}2:${c1}&${c2}2:${c2}&${c3}2:${c3}&${c4}2:${c4})=0,"",IFERROR(ROUND(${sum}+${bonus},2),"?")))}`;
+  return ['Date', week, ...PRODUCTS.map((p) => p.code), montant, 'Source', 'Réf', 'Note', `Bonus rachat (${env.currency}/unité)`];
 }
 
 /** Crée l'onglet d'un charbonnier s'il n'existe pas. */
 export async function ensureTab(title) {
   const meta = await gs.getMeta(true);
   if (meta.sheets.has(title)) return false;
-  const res = await gs.batchUpdate([{ addSheet: { properties: { title, gridProperties: { rowCount: 1000, columnCount: 10, frozenRowCount: 1 } } } }]);
+  const res = await gs.batchUpdate([{ addSheet: { properties: { title, gridProperties: { rowCount: 1000, columnCount: TAB_COLUMNS, frozenRowCount: 1 } } } }]);
   const sheetId = res.replies[0].addSheet.properties.sheetId;
-  await gs.write(`${gs.q(title)}!A1:J1`, [tabHeader()], false);
+  await gs.write(`${gs.q(title)}!A1:K1`, [tabHeader()], false);
   await gs.batchUpdate([gs.headerFormat(sheetId), gs.columnFormat(sheetId, 0, gs.DATE_TIME)]);
   await gs.getMeta(true);
   return true;
@@ -89,11 +94,19 @@ export async function rebuildFormulas() {
     ? ['TOTAL', ...['B', 'C', 'D', 'E', 'F'].map((col) => `=SUM(${col}${first}:${col}${last})`), '']
     : ['TOTAL', 0, 0, 0, 0, 0, ''];
 
-  // Formules de semaine (remises à jour à chaque fois : corrige les onglets créés avec un ancien format)
+  // Onglets créés avant la colonne K (bonus) : on ajoute la colonne manquante
+  const narrow = list.map((c) => meta.sheets.get(c.tab)).filter((p) => p.gridProperties.columnCount < TAB_COLUMNS);
+  await gs.batchUpdate(narrow.map((p) => ({
+    appendDimension: { sheetId: p.sheetId, dimension: 'COLUMNS', length: TAB_COLUMNS - p.gridProperties.columnCount },
+  })));
+
+  // En-têtes et formules des onglets (remis à jour à chaque fois : corrige les onglets créés avec un ancien format)
+  const header = tabHeader();
   await gs.writeMany([
-    ...list.map((c) => ({ range: `${gs.q(c.tab)}!B1`, values: [[tabHeader()[1]]] })),
+    ...list.map((c) => ({ range: `${gs.q(c.tab)}!A1:K1`, values: [header] })),
     ...Object.entries(salairesHeader()).map(([cell, values]) => ({ range: `${S}!${cell}`, values })),
   ], false);
+  await applyDefaultBonus();
 
   await gs.clear(`${S}!A${first}:G`);
   await gs.write(`${S}!A${first}:G${first + rows.length}`, [...rows, total], false);
@@ -138,7 +151,30 @@ export function deactivateCharbonnier(c) {
   });
 }
 
-const tabRange = (c) => `${gs.q(c.tab)}!A2:J`;
+const tabRange = (c) => `${gs.q(c.tab)}!A2:K`;
+
+/** Ajoute la colonne K (bonus) à un onglet créé avant son apparition. */
+async function ensureTabColumns(title) {
+  const p = await gs.sheetProps(title);
+  if (p.gridProperties.columnCount >= TAB_COLUMNS) return;
+  await gs.batchUpdate([{ appendDimension: { sheetId: p.sheetId, dimension: 'COLUMNS', length: TAB_COLUMNS - p.gridProperties.columnCount } }]);
+  await gs.getMeta(true);
+}
+
+/**
+ * Colonne G de l'onglet "Charbonniers" : bonus de rachat par unité.
+ * Les comptes de BONUS_RACHAT.ids reçoivent le bonus par défaut si la case est vide
+ * (une valeur saisie à la main, même 0, est respectée).
+ */
+async function applyDefaultBonus() {
+  const R = gs.q(SHEETS.CHARBONNIERS);
+  const todo = registry.filter((c) => !c.bonusSet && BONUS_RACHAT.ids.includes(c.discordId));
+  await gs.writeMany([
+    { range: `${R}!G1`, values: [[`Bonus rachat (${env.currency}/unité)`]] },
+    ...todo.map((c) => ({ range: `${R}!G${c.row}`, values: [[BONUS_RACHAT.montant]] })),
+  ]);
+  for (const c of todo) Object.assign(c, { bonus: BONUS_RACHAT.montant, bonusSet: true });
+}
 
 const fmtN = (n) => Math.round(n).toLocaleString('fr-FR');
 
@@ -159,13 +195,14 @@ export function recordDeposit(c, qty, { source = 'Discord', note = '' } = {}) {
     const rows = await gs.read(tabRange(c), { unformatted: true });
     const row = lastDataRow(rows, [IDX.date, 2, 3, 4, 5, IDX.ref]) + 3;
     await gs.ensureRows(c.tab, row);
+    await ensureTabColumns(c.tab);
     const ref = newRef('D');
     const serial = toSheetSerial();
     const t = gs.q(c.tab);
     await gs.writeMany([
       { range: `${t}!A${row}`, values: [[serial]] },
       { range: `${t}!C${row}:F${row}`, values: [PRODUCTS.map((p) => qty[p.code] || '')] },
-      { range: `${t}!H${row}:J${row}`, values: [[source, ref, String(note).slice(0, 300)]] },
+      { range: `${t}!H${row}:K${row}`, values: [[source, ref, String(note).slice(0, 300), c.bonus || '']] },
     ]);
     return { row, ref, serial, week: weekOfSerial(serial) };
   });

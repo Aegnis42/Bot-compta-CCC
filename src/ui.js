@@ -24,7 +24,7 @@ export function depositEmbed({ c, qty, montant, ref, week, weekSum, title, color
       { name: 'Semaine', value: `du ${week}`, inline: true },
       { name: 'Total de la semaine', value: `${qtyInline(weekSum.qty)}\n💰 **${money(weekSum.montant)}** à percevoir` },
     )
-    .setFooter({ text: `${c.name} · Réf ${ref}` })
+    .setFooter({ text: `${c.name}${c.bonus ? ` · bonus rachat +${fmt(c.bonus)}/unité` : ''} · Réf ${ref}` })
     .setTimestamp();
 }
 

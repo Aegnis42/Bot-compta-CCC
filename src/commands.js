@@ -146,7 +146,7 @@ export async function depositAndEmbed(c, qty, note) {
   const res = await recordDeposit(c, qty, { source: 'Discord', note });
   scheduleStockRefresh();
   const weekSum = await weekSummary(c, res.week);
-  return ui.depositEmbed({ c, qty, montant: rachatValue(qty), ref: res.ref, week: res.week, weekSum, title: '✅ Dépôt enregistré' });
+  return ui.depositEmbed({ c, qty, montant: rachatValue(qty, c.bonus), ref: res.ref, week: res.week, weekSum, title: '✅ Dépôt enregistré' });
 }
 
 const handlers = {

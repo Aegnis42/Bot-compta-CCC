@@ -21,7 +21,8 @@ export async function loadPrices() {
 
 export const getPrices = () => prices;
 
-export const rachatValue = (qty) => round2(CODES.reduce((s, c) => s + qty[c] * prices[c].rachat, 0));
+/** Valeur de rachat ; `bonus` = septimes ajoutés par unité (bonus du charbonnier). */
+export const rachatValue = (qty, bonus = 0) => round2(CODES.reduce((s, c) => s + qty[c] * (prices[c].rachat + bonus), 0));
 
 export const isChatelerie = (tarif) => /chat/i.test(String(tarif ?? ''));
 
