@@ -31,6 +31,27 @@ export const salairesHeader = () => ({
 /** Prix de vente de la ligne i selon le tarif contenu dans `tarifExpr`. */
 const sellPrice = (i, tarifExpr) => `IF(REGEXMATCH(LOWER(${tarifExpr}),"chat"),${P}!$E$${i + 2},${P}!$D$${i + 2})`;
 
+/**
+ * En-tête de l'onglet Contrats (formules calculées sur toute la colonne).
+ * Q : prix payé par le client (tarif de vente) · V : coût des matériaux (prix de rachat) · W : bénéfice = Q − V.
+ */
+function contratsHeader() {
+  const arr = (title, expr) => `={"${title}";ARRAYFORMULA(IF(A2:A="","",${expr}))}`;
+  const cmd = (i) => `${COLS.commande[i]}2:${COLS.commande[i]}`;
+  return [
+    'ID', 'Date', 'Client', `Tarif (${TARIFS.normal}/${TARIFS.chatelerie})`,
+    ...PRODUCTS.map((p) => `${p.code} commandé`),
+    ...PRODUCTS.map((p, i) => arr(`${p.code} livré`, `SUMIF(${L}!B2:B,A2:A,${L}!${COLS.livraison[i]}2:${COLS.livraison[i]})`)),
+    ...PRODUCTS.map((p, i) => arr(`${p.code} reste`, `${cmd(i)}-${COLS.livre[i]}2:${COLS.livre[i]}`)),
+    arr(`Prix client (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${cmd(i)}*${sellPrice(i, 'D2:D')}`).join('+')},2)`),
+    arr(`Montant livré (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${COLS.livre[i]}2:${COLS.livre[i]}*${sellPrice(i, 'D2:D')}`).join('+')},2)`),
+    arr('Statut', `IF(UPPER(T2:T)="OUI","Annulé",IF(${COLS.reste.map((c) => `(${c}2:${c}<=0)`).join('*')},"Livré",IF(${COLS.livre.map((c) => `${c}2:${c}`).join('+')}>0,"Partiel","En attente")))`),
+    'Annulé (OUI)', 'Note',
+    arr(`Coût matériaux (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${cmd(i)}*${P}!$C$${i + 2}`).join('+')},2)`),
+    arr(`Bénéfice (${env.currency})`, 'Q2:Q-V2:V'),
+  ];
+}
+
 const INIT = {
   async [SHEETS.PRIX](sheetId) {
     await gs.write(`${P}!A1:E${PRODUCTS.length + 1}`, [
@@ -80,18 +101,7 @@ const INIT = {
   },
 
   async [SHEETS.CONTRATS](sheetId) {
-    const arr = (title, expr) => `={"${title}";ARRAYFORMULA(IF(A2:A="","",${expr}))}`;
-    const header = [
-      'ID', 'Date', 'Client', `Tarif (${TARIFS.normal}/${TARIFS.chatelerie})`,
-      ...PRODUCTS.map((p) => `${p.code} commandé`),
-      ...PRODUCTS.map((p, i) => arr(`${p.code} livré`, `SUMIF(${L}!B2:B,A2:A,${L}!${COLS.livraison[i]}2:${COLS.livraison[i]})`)),
-      ...PRODUCTS.map((p, i) => arr(`${p.code} reste`, `${COLS.commande[i]}2:${COLS.commande[i]}-${COLS.livre[i]}2:${COLS.livre[i]}`)),
-      arr(`Montant total (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${COLS.commande[i]}2:${COLS.commande[i]}*${sellPrice(i, 'D2:D')}`).join('+')},2)`),
-      arr(`Montant livré (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${COLS.livre[i]}2:${COLS.livre[i]}*${sellPrice(i, 'D2:D')}`).join('+')},2)`),
-      arr('Statut', `IF(UPPER(T2:T)="OUI","Annulé",IF(${COLS.reste.map((c) => `(${c}2:${c}<=0)`).join('*')},"Livré",IF(${COLS.livre.map((c) => `${c}2:${c}`).join('+')}>0,"Partiel","En attente")))`),
-      'Annulé (OUI)', 'Note',
-    ];
-    await gs.write(`${C}!A1:U1`, [header], false);
+    await gs.write(`${C}!A1:W1`, [contratsHeader()], false);
     const list = (values, col) => ({
       setDataValidation: {
         range: { sheetId, startRowIndex: 1, startColumnIndex: col, endColumnIndex: col + 1 },
@@ -130,6 +140,8 @@ export async function ensureStructure() {
   for (const title of missing) {
     requests.push({ addSheet: { properties: { title, gridProperties: { frozenRowCount: title === SHEETS.SALAIRES ? 4 : 1 } } } });
   }
+  // En-tête des contrats toujours remis à jour (ajoute les colonnes Coût matériaux / Bénéfice aux anciens Sheets)
+  if (meta.sheets.has(SHEETS.CONTRATS)) await gs.write(`${C}!A1:W1`, [contratsHeader()], false);
   if (!requests.length) return [];
   await gs.batchUpdate(requests);
   const fresh = await gs.getMeta(true);

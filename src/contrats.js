@@ -7,7 +7,7 @@ const C = gs.q(SHEETS.CONTRATS);
 const L = gs.q(SHEETS.LIVRAISONS);
 
 // Contrats : A ID | B Date | C Client | D Tarif | E-H commandé | I-L livré | M-P reste
-//            | Q Montant total | R Montant livré | S Statut | T Annulé | U Note
+//            | Q Prix client | R Montant livré | S Statut | T Annulé | U Note | V Coût matériaux | W Bénéfice
 function toContract(r, i) {
   return {
     row: i + 2,
@@ -22,13 +22,15 @@ function toContract(r, i) {
     montantLivre: num(r[17]),
     statut: String(r[18] ?? ''),
     note: String(r[20] ?? ''),
+    cout: num(r[21]),
+    benefice: num(r[22]),
   };
 }
 
 export const isOpen = (ct) => ct.statut !== 'Livré' && ct.statut !== 'Annulé';
 
 export async function listContracts() {
-  const rows = await gs.read(`${C}!A2:U`, { unformatted: true });
+  const rows = await gs.read(`${C}!A2:W`, { unformatted: true });
   return rows.map(toContract).filter((ct) => ct.id);
 }
 

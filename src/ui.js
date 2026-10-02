@@ -70,31 +70,45 @@ export function stockEmbed(stock) {
 export function contractsSummaryEmbed(open) {
   const lines = open.slice(0, 20).map((ct) => {
     const reste = Object.fromEntries(PRODUCTS.map((p) => [p.code, Math.max(0, ct.reste[p.code])]));
-    return `${STATUS_ICON[ct.statut] ?? ''} **${ct.id}** — ${ct.client} · reste : ${qtyInline(reste)}`;
+    return `${STATUS_ICON[ct.statut] ?? ''} **${ct.id}** — ${ct.client} · reste : ${qtyInline(reste)} · 💰 ${money(ct.montant)} · 📈 ${money(ct.benefice)}`;
   });
-  return new EmbedBuilder().setColor(COLORS.warn).setTitle('📜 Contrats en cours').setDescription(lines.join('\n'));
+  const total = open.reduce((s, ct) => s + ct.benefice, 0);
+  return new EmbedBuilder().setColor(COLORS.warn).setTitle('📜 Contrats en cours').setDescription(lines.join('\n'))
+    .setFooter({ text: `Bénéfice attendu sur les contrats en cours : ${money(total)}` });
 }
 
 const STATUS_ICON = { 'En attente': '🕓', Partiel: '🟠', Livré: '✅', Annulé: '⛔' };
 
 export function contractEmbed(ct, stock) {
-  const lines = PRODUCTS.filter((p) => ct.cmd[p.code] || ct.livre[p.code]).map((p) => {
+  const ordered = PRODUCTS.filter((p) => ct.cmd[p.code]);
+  const demande = ordered.map((p) => `**${fmt(ct.cmd[p.code])}** ${p.name}`);
+  const resume = [
+    `👤 **${ct.client}** demande ${demande.length ? demande.join(' · ') : '—'}`,
+    '',
+    `💰 **${ct.client}** doit payer **${money(ct.montant)}** _(tarif ${ct.tarif || '?'})_`,
+    `⛏️ Ça coûte **${money(ct.cout)}** de matériaux`,
+    `📈 Le contrat rapporte **${money(ct.benefice)}** de bénéfice`,
+  ];
+
+  // Suivi de livraison : ce qui reste à livrer et ce que le stock ne couvre pas encore
+  const suivi = PRODUCTS.filter((p) => ct.cmd[p.code] || ct.livre[p.code]).map((p) => {
     const reste = Math.max(0, ct.reste[p.code]);
-    let line = `**${p.name} (${p.code})** — commandé ${fmt(ct.cmd[p.code])} · livré ${fmt(ct.livre[p.code])} · reste **${fmt(reste)}**`;
+    let line = `${p.code} : livré ${fmt(ct.livre[p.code])} / ${fmt(ct.cmd[p.code])}`;
     if (reste > 0 && isOpen(ct) && stock) {
       const manque = Math.max(0, reste - Math.max(0, stock[p.code].stock));
-      line += manque > 0 ? `\n  ⚠️ stock insuffisant : il manque **${fmt(manque)}**` : '\n  ✅ livrable avec le stock';
+      line += manque > 0 ? ` · ⚠️ il manque **${fmt(manque)}** en stock` : ' · ✅ livrable';
     }
     return line;
   });
+
   const embed = new EmbedBuilder()
     .setColor(ct.statut === 'Livré' ? COLORS.ok : ct.statut === 'Annulé' ? COLORS.err : COLORS.warn)
-    .setTitle(`📜 Contrat ${ct.id} — ${ct.client}`)
-    .setDescription(lines.join('\n') || '—')
+    .setTitle(`📜 Contrat ${ct.id}`)
+    .setDescription(resume.join('\n'))
     .addFields(
       { name: 'Statut', value: `${STATUS_ICON[ct.statut] ?? ''} ${ct.statut || '?'}`, inline: true },
-      { name: 'Tarif', value: ct.tarif || '?', inline: true },
-      { name: 'Montant', value: `${money(ct.montantLivre)} / ${money(ct.montant)}`, inline: true },
+      { name: 'Valeur déjà livrée', value: `${money(ct.montantLivre)} / ${money(ct.montant)}`, inline: true },
+      { name: 'Livraison', value: suivi.join('\n') || '—' },
     );
   if (ct.note) embed.addFields({ name: 'Note', value: ct.note.slice(0, 1000) });
   return embed;
