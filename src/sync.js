@@ -9,6 +9,7 @@ import {
 import * as ui from './ui.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
 import { updateStockChannels } from './stockChannels.js';
+import { ensureAdminRole } from './adminRole.js';
 
 // ---------- Google Sheet → Discord ----------
 
@@ -127,6 +128,7 @@ export function startSync(client) {
       await loadSettings();
       await payday(client);
       await updateStockChannels(client);
+      await ensureAdminRole(client).catch((e) => console.warn('[rôle]', e.message));
     } catch (e) {
       console.error('[sync]', e.message);
     } finally {

@@ -67,7 +67,9 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 ### 1. Bot Discord
 1. <https://discord.com/developers/applications> → **New Application** → onglet **Bot** → *Reset Token* : c'est le `DISCORD_TOKEN`.
 2. Toujours dans **Bot**, activer **Message Content Intent**.
-3. **OAuth2 → URL Generator** : scopes `bot` + `applications.commands`, permissions : *Gérer les salons*, *Gérer les rôles*, *Voir les salons*, *Envoyer des messages*, *Intégrer des liens*, *Ajouter des réactions*, *Lire l'historique*. Ouvrir l'URL et inviter le bot sur le serveur.
+3. Inviter le bot avec la permission **Administrateur** (nécessaire pour créer le rôle « Gestion bot » avec toutes les permissions) : `https://discord.com/oauth2/authorize?client_id=<ID de l'application>&scope=bot%20applications.commands&permissions=8`.
+
+Au démarrage, le bot crée le rôle **Gestion bot** (toutes les permissions) et le donne au compte `1222839727934279692` (constante `ADMIN_ROLE` dans `src/adminRole.js`).
 
 ### 2. Relier le Google Sheet (Apps Script)
 Le bot passe par un petit script installé directement dans votre Google Sheet : pas besoin de console Google Cloud.

@@ -9,6 +9,7 @@ import { ensureStructure } from './setup.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
 import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
 import { sendPayNotices } from './sync.js';
+import { ensureAdminRole, ADMIN_ROLE } from './adminRole.js';
 import {
   allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, validateName,
   recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
@@ -335,6 +336,8 @@ const handlers = {
       const cat = await charbonnierCategory(i.guild);
       lines.push(cat ? `📁 Catégorie des charbonniers : **${cat.name}**.` : 'ℹ️ Aucune catégorie réglée : ajoute l\'option `categorie` pour en créer une.');
     }
+    const roleState = await ensureAdminRole(i.client).catch((e) => `erreur : ${e.message}`);
+    lines.push(`🛡️ Rôle « ${ADMIN_ROLE.name} » : ${roleState}.`);
     lines.push('Ajoute ensuite tes charbonniers avec `/charbonnier ajouter`.');
     await i.editReply(lines.join('\n'));
   },

@@ -39,7 +39,7 @@ client.once(Events.ClientReady, async (c) => {
   const guild = await c.guilds.fetch(env.guildId).catch(() => null);
   if (!guild) {
     console.error(`❌ Le bot n'est pas sur le serveur ${env.guildId}. Invite-le avec :`);
-    console.error(`   https://discord.com/oauth2/authorize?client_id=${c.user.id}&scope=bot%20applications.commands&permissions=268520528`);
+    console.error(`   https://discord.com/oauth2/authorize?client_id=${c.user.id}&scope=bot%20applications.commands&permissions=8`);
     process.exit(1);
   }
   await guild.commands.set(commandDefs);
