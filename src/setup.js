@@ -12,7 +12,11 @@ export const COLS = {
   commande: ['E', 'F', 'G', 'H'], // Contrats
   livre: ['I', 'J', 'K', 'L'], // Contrats
   reste: ['M', 'N', 'O', 'P'], // Contrats
+  prixPerso: ['X', 'Y', 'Z', 'AA'], // Contrats : prix de vente personnalisé par unité (vide = tarif)
 };
+
+// Nombre de colonnes de l'onglet Contrats (A → AA)
+const CONTRATS_COLUMNS = 27;
 
 // Ligne de début des données dans "Salaires"
 export const SALAIRES_FIRST_ROW = 5;
@@ -28,8 +32,15 @@ export const salairesHeader = () => ({
   A2: [['Semaine affichée', `=IF(B1="",${weekFormula('TODAY()')},IFERROR(${weekFormula('B1')},"Date invalide en B1"))`]],
 });
 
-/** Prix de vente de la ligne i selon le tarif contenu dans `tarifExpr`. */
-const sellPrice = (i, tarifExpr) => `IF(REGEXMATCH(LOWER(${tarifExpr}),"chat"),${P}!$E$${i + 2},${P}!$D$${i + 2})`;
+/**
+ * Prix de vente unitaire du produit i : le prix personnalisé du contrat (`customExpr`) s'il est renseigné
+ * et supérieur à 0, sinon le tarif (`tarifExpr` : Normal ou Chatelerie).
+ */
+const sellPrice = (i, tarifExpr, customExpr) => {
+  const tarif = `IF(REGEXMATCH(LOWER(${tarifExpr}),"chat"),${P}!$E${i + 2},${P}!$D${i + 2})`;
+  return customExpr ? `IF(IFERROR(${customExpr}*1,0)>0,IFERROR(${customExpr}*1,0),${tarif})` : tarif;
+};
+const contractCustom = (i) => `${COLS.prixPerso[i]}2:${COLS.prixPerso[i]}`;
 
 /**
  * En-tête de l'onglet Contrats (formules calculées sur toute la colonne).
@@ -43,13 +54,29 @@ function contratsHeader() {
     ...PRODUCTS.map((p) => `${p.code} commandé`),
     ...PRODUCTS.map((p, i) => arr(`${p.code} livré`, `SUMIF(${L}!B2:B,A2:A,${L}!${COLS.livraison[i]}2:${COLS.livraison[i]})`)),
     ...PRODUCTS.map((p, i) => arr(`${p.code} reste`, `${cmd(i)}-${COLS.livre[i]}2:${COLS.livre[i]}`)),
-    arr(`Prix client (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${cmd(i)}*${sellPrice(i, 'D2:D')}`).join('+')},2)`),
-    arr(`Montant livré (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${COLS.livre[i]}2:${COLS.livre[i]}*${sellPrice(i, 'D2:D')}`).join('+')},2)`),
+    arr(`Prix client (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${cmd(i)}*${sellPrice(i, 'D2:D', contractCustom(i))}`).join('+')},2)`),
+    arr(`Montant livré (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${COLS.livre[i]}2:${COLS.livre[i]}*${sellPrice(i, 'D2:D', contractCustom(i))}`).join('+')},2)`),
     arr('Statut', `IF(UPPER(T2:T)="OUI","Annulé",IF(${COLS.reste.map((c) => `(${c}2:${c}<=0)`).join('*')},"Livré",IF(${COLS.livre.map((c) => `${c}2:${c}`).join('+')}>0,"Partiel","En attente")))`),
     'Annulé (OUI)', 'Note',
     arr(`Coût matériaux (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${cmd(i)}*${P}!$C$${i + 2}`).join('+')},2)`),
     arr(`Bénéfice (${env.currency})`, 'Q2:Q-V2:V'),
+    ...PRODUCTS.map((p) => `Prix perso ${p.code} (${env.currency}/unité)`),
   ];
+}
+
+/** En-tête de l'onglet Livraisons : montant au prix du contrat (prix perso ou tarif). */
+function livraisonsHeader() {
+  const look = (col) => `IFERROR(VLOOKUP(B2:B,${C}!A:AA,${col},FALSE),"")`;
+  const montant = `={"Montant (${env.currency})";ARRAYFORMULA(IF(B2:B="","",IFERROR(ROUND(${PRODUCTS.map((_, i) => `${COLS.livraison[i]}2:${COLS.livraison[i]}*${sellPrice(i, look(4), look(24 + i))}`).join('+')},2),"?")))}`;
+  return ['Date', 'Contrat', ...PRODUCTS.map((p) => p.code), montant, 'Par', 'Note'];
+}
+
+/** Ajoute les colonnes manquantes de l'onglet Contrats (prix perso jusqu'à AA). */
+async function ensureContratsColumns() {
+  const p = await gs.sheetProps(SHEETS.CONTRATS);
+  if (p.gridProperties.columnCount >= CONTRATS_COLUMNS) return;
+  await gs.batchUpdate([{ appendDimension: { sheetId: p.sheetId, dimension: 'COLUMNS', length: CONTRATS_COLUMNS - p.gridProperties.columnCount } }]);
+  await gs.getMeta(true);
 }
 
 const INIT = {
@@ -101,7 +128,8 @@ const INIT = {
   },
 
   async [SHEETS.CONTRATS](sheetId) {
-    await gs.write(`${C}!A1:W1`, [contratsHeader()], false);
+    await ensureContratsColumns();
+    await gs.write(`${C}!A1:AA1`, [contratsHeader()], false);
     const list = (values, col) => ({
       setDataValidation: {
         range: { sheetId, startRowIndex: 1, startColumnIndex: col, endColumnIndex: col + 1 },
@@ -117,9 +145,7 @@ const INIT = {
   },
 
   async [SHEETS.LIVRAISONS](sheetId) {
-    const tarif = `IFERROR(VLOOKUP(B2:B,${C}!A:D,4,FALSE),"")`;
-    const montant = `={"Montant (${env.currency})";ARRAYFORMULA(IF(B2:B="","",IFERROR(ROUND(${PRODUCTS.map((_, i) => `${COLS.livraison[i]}2:${COLS.livraison[i]}*${sellPrice(i, tarif)}`).join('+')},2),"?")))}`;
-    await gs.write(`${L}!A1:I1`, [['Date', 'Contrat', ...PRODUCTS.map((p) => p.code), montant, 'Par', 'Note']], false);
+    await gs.write(`${L}!A1:I1`, [livraisonsHeader()], false);
     return [gs.headerFormat(sheetId), gs.columnFormat(sheetId, 0, gs.DATE_TIME)];
   },
 };
@@ -140,8 +166,12 @@ export async function ensureStructure() {
   for (const title of missing) {
     requests.push({ addSheet: { properties: { title, gridProperties: { frozenRowCount: title === SHEETS.SALAIRES ? 4 : 1 } } } });
   }
-  // En-tête des contrats toujours remis à jour (ajoute les colonnes Coût matériaux / Bénéfice aux anciens Sheets)
-  if (meta.sheets.has(SHEETS.CONTRATS)) await gs.write(`${C}!A1:W1`, [contratsHeader()], false);
+  // En-têtes des contrats et livraisons toujours remis à jour (ajoute les nouvelles colonnes aux anciens Sheets)
+  if (meta.sheets.has(SHEETS.CONTRATS)) {
+    await ensureContratsColumns();
+    await gs.write(`${C}!A1:AA1`, [contratsHeader()], false);
+  }
+  if (meta.sheets.has(SHEETS.LIVRAISONS)) await gs.write(`${L}!A1:I1`, [livraisonsHeader()], false);
   if (!requests.length) return [];
   await gs.batchUpdate(requests);
   const fresh = await gs.getMeta(true);

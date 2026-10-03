@@ -8,6 +8,7 @@ const L = gs.q(SHEETS.LIVRAISONS);
 
 // Contrats : A ID | B Date | C Client | D Tarif | E-H commandé | I-L livré | M-P reste
 //            | Q Prix client | R Montant livré | S Statut | T Annulé | U Note | V Coût matériaux | W Bénéfice
+//            | X-AA Prix perso par unité (CP, C, BC, CO ; vide = tarif)
 function toContract(r, i) {
   return {
     row: i + 2,
@@ -24,13 +25,15 @@ function toContract(r, i) {
     note: String(r[20] ?? ''),
     cout: num(r[21]),
     benefice: num(r[22]),
+    // Prix de vente personnalisé par unité, null si le tarif s'applique
+    prixPerso: Object.fromEntries(CODES.map((c, k) => [c, num(r[23 + k]) > 0 ? num(r[23 + k]) : null])),
   };
 }
 
 export const isOpen = (ct) => ct.statut !== 'Livré' && ct.statut !== 'Annulé';
 
 export async function listContracts() {
-  const rows = await gs.read(`${C}!A2:W`, { unformatted: true });
+  const rows = await gs.read(`${C}!A2:AA`, { unformatted: true });
   return rows.map(toContract).filter((ct) => ct.id);
 }
 
@@ -52,7 +55,7 @@ export async function getStock() {
   return stock;
 }
 
-export function createContract({ client, tarif, qty, note = '' }) {
+export function createContract({ client, tarif, qty, prices = {}, note = '' }) {
   return gs.withLock(async () => {
     const rows = await gs.read(`${C}!A2:A`);
     const max = rows.reduce((m, r) => Math.max(m, Number(String(r[0] ?? '').match(/^CT-(\d+)$/i)?.[1] ?? 0)), 0);
@@ -62,8 +65,24 @@ export function createContract({ client, tarif, qty, note = '' }) {
     await gs.writeMany([
       { range: `${C}!A${row}:H${row}`, values: [[id, toSheetSerial(), client, tarif, ...CODES.map((c) => qty[c] || '')]] },
       { range: `${C}!U${row}`, values: [[note]] },
+      { range: `${C}!X${row}:AA${row}`, values: [CODES.map((c) => prices[c] || '')] },
     ]);
     return getContract(id);
+  });
+}
+
+/**
+ * Modifie les prix personnalisés d'un contrat. prices = { CP: 0.9, C: null, ... } :
+ * un nombre > 0 fixe le prix, 0 le retire (retour au tarif), undefined ne change rien.
+ */
+export function setContractPrices(id, prices) {
+  return gs.withLock(async () => {
+    const ct = await getContract(id);
+    if (!ct) throw new UserError(`Contrat **${id}** introuvable.`);
+    if (ct.statut === 'Annulé') throw new UserError(`Le contrat **${ct.id}** est annulé.`);
+    const values = CODES.map((c) => (prices[c] === undefined ? ct.prixPerso[c] ?? '' : prices[c] || ''));
+    await gs.write(`${C}!X${ct.row}:AA${ct.row}`, [values]);
+    return getContract(ct.id);
   });
 }
 

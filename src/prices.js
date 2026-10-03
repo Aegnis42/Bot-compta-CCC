@@ -26,5 +26,12 @@ export const rachatValue = (qty, bonus = 0) => round2(CODES.reduce((s, c) => s +
 
 export const isChatelerie = (tarif) => /chat/i.test(String(tarif ?? ''));
 
+/** Prix de vente unitaire d'un produit pour un contrat : prix perso s'il existe, sinon le tarif. */
+export const contractUnitPrice = (ct, code) =>
+  ct.prixPerso?.[code] ?? (isChatelerie(ct.tarif) ? prices[code].chatelerie : prices[code].normal);
+
+/** Valeur de vente de quantités au prix d'un contrat. */
+export const contractValue = (qty, ct) => round2(CODES.reduce((s, c) => s + qty[c] * contractUnitPrice(ct, c), 0));
+
 export const venteValue = (qty, tarif) =>
   round2(CODES.reduce((s, c) => s + qty[c] * (isChatelerie(tarif) ? prices[c].chatelerie : prices[c].normal), 0));

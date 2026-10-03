@@ -1,6 +1,7 @@
 import { EmbedBuilder } from 'discord.js';
 import { env, PRODUCTS, stockLevel, STOCK_LEVELS } from './config.js';
 import { isOpen } from './contrats.js';
+import { contractUnitPrice } from './prices.js';
 
 export const COLORS = { ok: 0x2ecc71, info: 0x3498db, warn: 0xe67e22, err: 0xe74c3c, sheet: 0x0f9d58, coal: 0x2c2f33 };
 
@@ -81,7 +82,9 @@ const STATUS_ICON = { 'En attente': '🕓', Partiel: '🟠', Livré: '✅', Annu
 
 export function contractEmbed(ct, stock) {
   const ordered = PRODUCTS.filter((p) => ct.cmd[p.code]);
-  const demande = ordered.map((p) => `**${fmt(ct.cmd[p.code])}** ${p.name}`);
+  // Prix unitaire appliqué ; ✏️ = prix personnalisé du contrat
+  const demande = ordered.map((p) =>
+    `**${fmt(ct.cmd[p.code])}** ${p.name} à ${fmt(contractUnitPrice(ct, p.code))}${ct.prixPerso?.[p.code] ? ' ✏️' : ''}`);
   const resume = [
     `👤 **${ct.client}** demande ${demande.length ? demande.join(' · ') : '—'}`,
     '',

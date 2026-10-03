@@ -4,7 +4,7 @@ import {
 import { env, PRODUCTS, CODES, TARIFS } from './config.js';
 import { UserError, emptyQty, hasQty } from './utils.js';
 import { normalizeWeek, weekLabel } from './time.js';
-import { rachatValue, venteValue, loadPrices } from './prices.js';
+import { rachatValue, contractValue, loadPrices } from './prices.js';
 import { ensureStructure } from './setup.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
 import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
@@ -14,7 +14,7 @@ import {
   recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
 } from './charbonniers.js';
 import {
-  listContracts, getContract, getStock, createContract, deliverContract, cancelContract, isOpen,
+  listContracts, getContract, getStock, createContract, deliverContract, cancelContract, setContractPrices, isOpen,
 } from './contrats.js';
 import * as ui from './ui.js';
 
@@ -28,6 +28,12 @@ const addQtyOptions = (b) => {
 };
 const weekOption = (o) => o.setName('semaine').setDescription('Un jour de la semaine voulue, ex : 29/09 ou "derniere" (par défaut : semaine en cours)');
 const memberOption = (o) => o.setName('membre').setDescription('(Staff) Le charbonnier concerné');
+const addPriceOptions = (b) => {
+  for (const p of PRODUCTS) {
+    b.addNumberOption((o) => o.setName(`prix_${p.code.toLowerCase()}`).setDescription(`Prix perso du ${p.name} par unité (vide = tarif, 0 = retirer)`).setMinValue(0));
+  }
+  return b;
+};
 const contractIdOption = (o) => o.setName('id').setDescription('ID du contrat (ex : CT-001)').setRequired(true).setAutocomplete(true);
 
 export const commandDefs = [
@@ -56,14 +62,17 @@ export const commandDefs = [
     .addStringOption(weekOption),
 
   new SlashCommandBuilder().setName('contrat').setDescription('Gestion des contrats de vente')
-    .addSubcommand((s) => addQtyOptions(
+    .addSubcommand((s) => addPriceOptions(addQtyOptions(
       s.setName('creer').setDescription('Créer un contrat')
         .addStringOption((o) => o.setName('client').setDescription('Nom du client').setRequired(true))
         .addStringOption((o) => o.setName('tarif').setDescription('Grille de prix').setRequired(true)
           .addChoices({ name: TARIFS.normal, value: TARIFS.normal }, { name: TARIFS.chatelerie, value: TARIFS.chatelerie })),
-    ).addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)')))
+    )).addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)')))
     .addSubcommand((s) => addQtyOptions(
       s.setName('livrer').setDescription('Livrer depuis le stock (sans quantité : livre le maximum possible)').addStringOption(contractIdOption),
+    ))
+    .addSubcommand((s) => addPriceOptions(
+      s.setName('prix').setDescription('Fixer un prix perso par type de charbon (0 = revenir au tarif)').addStringOption(contractIdOption),
     ))
     .addSubcommand((s) => s.setName('voir').setDescription('Détail d\'un contrat').addStringOption(contractIdOption))
     .addSubcommand((s) => s.setName('liste').setDescription('Contrats en cours'))
@@ -96,6 +105,16 @@ export const isStaff = (member) =>
 
 // Commandes réservées au staff (vérifiées par le bot avant exécution)
 const STAFF_COMMANDS = new Set(['stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
+
+/** Prix perso saisis dans la commande : { CP: 0.9, ... } (seulement les options renseignées). */
+function readPrices(i) {
+  const prices = {};
+  for (const code of CODES) {
+    const v = i.options.getNumber(`prix_${code.toLowerCase()}`);
+    if (v !== null) prices[code] = v;
+  }
+  return prices;
+}
 
 function readQty(i) {
   const qty = emptyQty();
@@ -219,6 +238,7 @@ const handlers = {
         client: i.options.getString('client', true).slice(0, 100),
         tarif: i.options.getString('tarif', true),
         qty,
+        prices: readPrices(i),
         note: i.options.getString('note') ?? '',
       });
       await i.editReply({ content: `Contrat **${ct.id}** créé.`, embeds: [ui.contractEmbed(ct, await getStock())] });
@@ -230,9 +250,14 @@ const handlers = {
         return;
       }
       await i.editReply({
-        content: `🚚 Livraison enregistrée pour **${contract.id}** : ${ui.qtyInline(delivered)} (${ui.money(venteValue(delivered, contract.tarif))})`,
+        content: `🚚 Livraison enregistrée pour **${contract.id}** : ${ui.qtyInline(delivered)} (${ui.money(contractValue(delivered, contract))})`,
         embeds: [ui.contractEmbed(contract, stock)],
       });
+    } else if (sub === 'prix') {
+      const prices = readPrices(i);
+      if (!Object.keys(prices).length) throw new UserError('Indique au moins un prix (`prix_cp`, `prix_c`, `prix_bc` ou `prix_co`).');
+      const ct = await setContractPrices(i.options.getString('id', true), prices);
+      await i.editReply({ content: `Prix du contrat **${ct.id}** mis à jour.`, embeds: [ui.contractEmbed(ct, await getStock())] });
     } else if (sub === 'voir') {
       const ct = await getContract(i.options.getString('id', true));
       if (!ct) throw new UserError('Contrat introuvable.');
