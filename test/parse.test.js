@@ -108,3 +108,30 @@ test('prix de vente d\'un contrat : prix perso sinon tarif', async () => {
   assert.equal(contractUnitPrice({ tarif: 'Normal', prixPerso: {} }, 'CO'), 6);
   assert.equal(contractValue({ CP: 100, C: 10, BC: 0, CO: 0 }, ct), 105); // 100×0,9 + 10×1,5
 });
+
+test('historique : chiffres d\'une semaine (mêmes règles que le récap)', async () => {
+  const { weekFigures } = await import('../src/historique.js');
+  const lundi = 46293; // 28/09/2026
+  const data = {
+    livraisons: [[lundi + 1.5, 'CT-1', '', '', '', '', 5000], [lundi + 8, 'CT-2', '', '', '', '', 999]], // 2e : semaine suivante
+    achats: [[lundi + 2, 'X', '', '', '', '', 1000]],
+    nourriture: [[lundi + 3, 350]],
+    tabs: [
+      { rows: [[lundi + 1, '', 100, '', '', '', 2000]] },
+      { rows: [[lundi + 6.9, '', 10, '', '', '', 6]] },
+      { rows: [[lundi - 1, '', 10, '', '', '', 6]] }, // semaine précédente : ne compte pas
+    ],
+  };
+  const f = weekFigures(lundi, data, { gestion: 0.4, clan: 0.1, citoyen: 50, taxe: 0.2 });
+  assert.equal(f.ca, 5000);
+  assert.equal(f.rachat, 2006);
+  assert.equal(f.cout, 3006);
+  assert.equal(f.benefice, 1994);
+  assert.equal(f.gestion, 797.6);
+  assert.equal(f.clan, 199.4);
+  assert.equal(f.fournisseurs, 2);
+  assert.equal(f.citoyennete, 100);
+  assert.equal(f.final, 547); // 1994 − 797,6 − 199,4 − 100 − 350
+  assert.equal(f.taxe, 109.4);
+  assert.equal(f.bat, 437.6);
+});

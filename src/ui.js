@@ -117,6 +117,18 @@ export function contractEmbed(ct, stock) {
   return embed;
 }
 
+export function historiqueEmbed(weeks) {
+  const lines = weeks.map((w) => [
+    `📅 **${w.semaine}**`,
+    `CA ${money(w.ca)} · coût ${money(w.cout)} · bénéfice **${money(w.benefice)}**`,
+    `bénéfice final ${money(w.final)} · BAT **${money(w.bat)}**`,
+  ].join('\n'));
+  return new EmbedBuilder()
+    .setColor(COLORS.coal)
+    .setTitle('🗂️ Historique des semaines')
+    .setDescription(lines.join('\n\n') || '_Aucune semaine terminée pour l\'instant._');
+}
+
 export function welcomeEmbed(c) {
   return new EmbedBuilder()
     .setColor(COLORS.coal)

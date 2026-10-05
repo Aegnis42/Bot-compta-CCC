@@ -92,6 +92,12 @@ async function ensureContratsColumns() {
 
 const NOURRITURE_HEADER = ['Date', `Montant (${env.currency})`, 'Note', 'Par', 'Hebdomadaire (OUI)', 'ID'];
 
+export const HISTORIQUE_HEADER = [
+  'Semaine', 'Lundi', 'Chiffre d\'affaires', 'Rachat charbonniers', 'Achats extérieurs', 'Coût matériaux', 'Bénéfice',
+  'Salaire gestion', 'Salaire clan', 'Charbonniers ayant fourni', 'Citoyenneté', 'Contrat nourriture', 'Bénéfice final',
+  'Taxe', 'BAT', ...PRODUCTS.map((p) => `Stock ${p.code} (fin de semaine)`), 'Clôturé le',
+];
+
 const INIT = {
   async [SHEETS.PRIX](sheetId) {
     await gs.write(`${P}!A1:E${PRODUCTS.length + 1}`, [
@@ -135,6 +141,17 @@ const INIT = {
   async [SHEETS.NOURRITURE](sheetId) {
     await gs.write(`${N}!A1:F1`, [NOURRITURE_HEADER]);
     return [gs.headerFormat(sheetId), gs.columnFormat(sheetId, 0, gs.DATE_TIME)];
+  },
+
+  async [SHEETS.HISTORIQUE](sheetId) {
+    await gs.write(`${gs.q(SHEETS.HISTORIQUE)}!A1:T1`, [HISTORIQUE_HEADER]);
+    const number = { type: 'NUMBER', pattern: '#,##0.00' };
+    return [
+      gs.headerFormat(sheetId),
+      gs.columnFormat(sheetId, 1, { type: 'DATE', pattern: 'dd/mm/yyyy' }),
+      ...[2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14].map((col) => gs.columnFormat(sheetId, col, number)),
+      gs.columnFormat(sheetId, 19, gs.DATE_TIME),
+    ];
   },
 
   async [SHEETS.RECAP]() {
@@ -304,7 +321,7 @@ export async function ensureStructure() {
   const meta = await gs.getMeta(true);
   const order = [
     SHEETS.PRIX, SHEETS.CHARBONNIERS, SHEETS.SALAIRES, SHEETS.STOCK, SHEETS.CONTRATS, SHEETS.LIVRAISONS,
-    SHEETS.CONFIG, SHEETS.ACHATS, SHEETS.NOURRITURE, SHEETS.RECAP,
+    SHEETS.CONFIG, SHEETS.ACHATS, SHEETS.NOURRITURE, SHEETS.RECAP, SHEETS.HISTORIQUE,
   ];
   const missing = order.filter((t) => !meta.sheets.has(t));
 

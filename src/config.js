@@ -82,4 +82,5 @@ export const SHEETS = {
   ACHATS: 'Achats',
   NOURRITURE: 'Nourriture',
   RECAP: 'Feuille 1',
+  HISTORIQUE: 'Historique',
 };

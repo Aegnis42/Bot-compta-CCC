@@ -37,6 +37,7 @@ Le bot crée tout seul les onglets au premier démarrage (il ne touche pas aux o
 | `Livraisons` | Historique des livraisons de contrats |
 | `Achats` | Charbon acheté ailleurs qu'à nos charbonniers : entre dans le stock ; rattaché à un contrat, son prix remplace le prix de rachat dans le coût matériaux du contrat |
 | `Nourriture` | Contrats nourriture, déduits du bénéfice de la semaine |
+| `Historique` | Une ligne par semaine terminée (chiffres du récap figés à la clôture, le lundi à 00h, + stock de fin de semaine) |
 
 Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des formules : **ne pas écrire dedans**.
 
@@ -61,6 +62,7 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 | `/contrat voir id` · `/contrat liste` · `/contrat annuler id` | staff | Suivi des contrats |
 | `/achat fournisseur prix cp c bc co [contrat] [note]` | staff | Charbon acheté à l'extérieur (ajouté au stock, compté dans le coût matériaux) |
 | `/nourriture montant [note] [hebdomadaire]` | staff | Contrat nourriture de la semaine (ID `NR-001`…) |
+| `/historique [semaines]` | staff | Chiffres des dernières semaines terminées |
 | `/recurrents liste` · `/recurrents arreter id` | staff | Contrats hebdomadaires : avec l'option `hebdomadaire` de `/contrat creer` ou `/nourriture`, le contrat est recréé automatiquement chaque lundi à 00h (colonne « Hebdomadaire » = OUI dans le Sheet) |
 | `/charbonnier ajouter membre [nom] [salon]` | staff | Crée le salon privé + l'onglet |
 | `/charbonnier retirer membre` · `/charbonnier liste` | staff | Gestion des charbonniers |

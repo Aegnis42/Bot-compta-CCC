@@ -11,6 +11,7 @@ import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
 import { sendPayNotices } from './sync.js';
 import { recordPurchase, recordFood } from './achats.js';
 import { listRecurring, stopRecurring } from './recurrents.js';
+import { lastWeeks } from './historique.js';
 import {
   allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, validateName,
   recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
@@ -92,6 +93,9 @@ export const commandDefs = [
     .addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)'))
     .addBooleanOption((o) => o.setName('hebdomadaire').setDescription('Se répète chaque semaine (recréé automatiquement le lundi)')),
 
+  new SlashCommandBuilder().setName('historique').setDescription('Chiffres des dernières semaines terminées (onglet Historique)')
+    .addIntegerOption((o) => o.setName('semaines').setDescription('Nombre de semaines à afficher (6 par défaut)').setMinValue(1).setMaxValue(20)),
+
   new SlashCommandBuilder().setName('recurrents').setDescription('Contrats hebdomadaires (ventes et nourriture)')
     .addSubcommand((s) => s.setName('liste').setDescription('Voir les contrats qui se répètent chaque semaine'))
     .addSubcommand((s) => s.setName('arreter').setDescription('Arrêter la répétition d\'un contrat')
@@ -123,7 +127,7 @@ export const isStaff = (member) =>
   );
 
 // Commandes réservées au staff (vérifiées par le bot avant exécution)
-const STAFF_COMMANDS = new Set(['achat', 'nourriture', 'recurrents', 'stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
+const STAFF_COMMANDS = new Set(['achat', 'nourriture', 'recurrents', 'historique', 'stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
 
 /** Prix perso saisis dans la commande : { CP: 0.9, ... } (seulement les options renseignées). */
 function readPrices(i) {
@@ -271,6 +275,11 @@ const handlers = {
     const { id } = await recordFood({ montant, note: i.options.getString('note') ?? '', par: i.user.username, hebdo });
     await i.editReply(`🍖 Contrat nourriture **${id}** enregistré : **${ui.money(montant)}**, déduit du bénéfice de la semaine (récap Feuille 1).`
       + (hebdo ? '\n🔁 Hebdomadaire : il sera recréé chaque lundi (`/recurrents arreter` pour l\'arrêter).' : ''));
+  },
+
+  async historique(i) {
+    const weeks = await lastWeeks(i.options.getInteger('semaines') ?? 6);
+    await i.editReply({ embeds: [ui.historiqueEmbed(weeks)] });
   },
 
   async recurrents(i) {
