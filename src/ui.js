@@ -109,7 +109,7 @@ export function contractEmbed(ct, stock) {
     .setTitle(`📜 Contrat ${ct.id}`)
     .setDescription(resume.join('\n'))
     .addFields(
-      { name: 'Statut', value: `${STATUS_ICON[ct.statut] ?? ''} ${ct.statut || '?'}`, inline: true },
+      { name: 'Statut', value: `${STATUS_ICON[ct.statut] ?? ''} ${ct.statut || '?'}${ct.hebdo ? '\n🔁 Hebdomadaire' : ''}`, inline: true },
       { name: 'Valeur déjà livrée', value: `${money(ct.montantLivre)} / ${money(ct.montant)}`, inline: true },
       { name: 'Livraison', value: suivi.join('\n') || '—' },
     );

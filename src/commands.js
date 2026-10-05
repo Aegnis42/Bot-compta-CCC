@@ -10,6 +10,7 @@ import { loadSettings, getSetting, setSetting } from './settings.js';
 import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
 import { sendPayNotices } from './sync.js';
 import { recordPurchase, recordFood } from './achats.js';
+import { listRecurring, stopRecurring } from './recurrents.js';
 import {
   allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, validateName,
   recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
@@ -68,7 +69,8 @@ export const commandDefs = [
         .addStringOption((o) => o.setName('client').setDescription('Nom du client').setRequired(true))
         .addStringOption((o) => o.setName('tarif').setDescription('Grille de prix').setRequired(true)
           .addChoices({ name: TARIFS.normal, value: TARIFS.normal }, { name: TARIFS.chatelerie, value: TARIFS.chatelerie })),
-    )).addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)')))
+    )).addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)'))
+      .addBooleanOption((o) => o.setName('hebdomadaire').setDescription('Se répète chaque semaine (recréé automatiquement le lundi)')))
     .addSubcommand((s) => addQtyOptions(
       s.setName('livrer').setDescription('Livrer depuis le stock (sans quantité : livre le maximum possible)').addStringOption(contractIdOption),
     ))
@@ -87,7 +89,13 @@ export const commandDefs = [
 
   new SlashCommandBuilder().setName('nourriture').setDescription('Enregistrer un contrat nourriture (déduit du bénéfice de la semaine)')
     .addNumberOption((o) => o.setName('montant').setDescription(`Montant payé (${env.currency})`).setRequired(true).setMinValue(0))
-    .addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)')),
+    .addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)'))
+    .addBooleanOption((o) => o.setName('hebdomadaire').setDescription('Se répète chaque semaine (recréé automatiquement le lundi)')),
+
+  new SlashCommandBuilder().setName('recurrents').setDescription('Contrats hebdomadaires (ventes et nourriture)')
+    .addSubcommand((s) => s.setName('liste').setDescription('Voir les contrats qui se répètent chaque semaine'))
+    .addSubcommand((s) => s.setName('arreter').setDescription('Arrêter la répétition d\'un contrat')
+      .addStringOption((o) => o.setName('id').setDescription('CT-… ou NR-…').setRequired(true).setAutocomplete(true))),
 
   new SlashCommandBuilder().setName('charbonnier').setDescription('Gestion des charbonniers')
     .addSubcommand((s) => s.setName('ajouter').setDescription('Ajouter un charbonnier (crée son salon et son onglet)')
@@ -115,7 +123,7 @@ export const isStaff = (member) =>
   );
 
 // Commandes réservées au staff (vérifiées par le bot avant exécution)
-const STAFF_COMMANDS = new Set(['achat', 'nourriture', 'stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
+const STAFF_COMMANDS = new Set(['achat', 'nourriture', 'recurrents', 'stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
 
 /** Prix perso saisis dans la commande : { CP: 0.9, ... } (seulement les options renseignées). */
 function readPrices(i) {
@@ -259,8 +267,25 @@ const handlers = {
 
   async nourriture(i) {
     const montant = i.options.getNumber('montant', true);
-    await recordFood({ montant, note: i.options.getString('note') ?? '', par: i.user.username });
-    await i.editReply(`🍖 Contrat nourriture enregistré : **${ui.money(montant)}**, déduit du bénéfice de la semaine (récap Feuille 1).`);
+    const hebdo = i.options.getBoolean('hebdomadaire') ?? false;
+    const { id } = await recordFood({ montant, note: i.options.getString('note') ?? '', par: i.user.username, hebdo });
+    await i.editReply(`🍖 Contrat nourriture **${id}** enregistré : **${ui.money(montant)}**, déduit du bénéfice de la semaine (récap Feuille 1).`
+      + (hebdo ? '\n🔁 Hebdomadaire : il sera recréé chaque lundi (`/recurrents arreter` pour l\'arrêter).' : ''));
+  },
+
+  async recurrents(i) {
+    if (i.options.getSubcommand() === 'arreter') {
+      await i.editReply(await stopRecurring(i.options.getString('id', true)));
+      return;
+    }
+    const { contracts, food } = await listRecurring();
+    const lines = [
+      ...contracts.map((ct) => `📜 **${ct.id}** — ${ct.client} : ${ui.qtyInline(ct.cmd)} · ${ui.money(ct.montant)} · 📈 ${ui.money(ct.benefice)}`),
+      ...food.map((f) => `🍖 **${f.id}** — nourriture : ${ui.money(f.montant)}${f.note ? ` (${f.note})` : ''}`),
+    ];
+    await i.editReply(lines.length
+      ? `🔁 **Contrats hebdomadaires** (recréés chaque lundi) :\n${lines.join('\n')}`
+      : 'Aucun contrat hebdomadaire. Utilise l\'option `hebdomadaire` de `/contrat creer` ou `/nourriture`.');
   },
 
   async salaires(i) {
@@ -279,6 +304,7 @@ const handlers = {
         qty,
         prices: readPrices(i),
         note: i.options.getString('note') ?? '',
+        hebdo: i.options.getBoolean('hebdomadaire') ?? false,
       });
       await i.editReply({ content: `Contrat **${ct.id}** créé.`, embeds: [ui.contractEmbed(ct, await getStock())] });
     } else if (sub === 'livrer') {
@@ -408,6 +434,16 @@ const handlers = {
 
 let contractCache = { at: 0, list: [] };
 async function autocomplete(i) {
+  if (i.commandName === 'recurrents') {
+    const typed = String(i.options.getFocused() ?? '').toLowerCase();
+    const { contracts, food } = await listRecurring();
+    const items = [
+      ...contracts.map((ct) => ({ name: `${ct.id} — ${ct.client}`, value: ct.id })),
+      ...food.map((f) => ({ name: `${f.id} — nourriture ${ui.money(f.montant)}${f.note ? ` (${f.note})` : ''}`, value: f.id })),
+    ];
+    await i.respond(items.filter((x) => x.name.toLowerCase().includes(typed)).slice(0, 25).map((x) => ({ ...x, name: x.name.slice(0, 100) })));
+    return;
+  }
   if (Date.now() - contractCache.at > 15000) contractCache = { at: Date.now(), list: await listContracts() };
   const sub = i.options.getSubcommand(false);
   const typed = String(i.options.getFocused() ?? '').toLowerCase();
@@ -428,7 +464,10 @@ export async function handleInteraction(i) {
     if (i.isRepliable()) await i.reply({ content: 'Ce bot ne fonctionne que sur le serveur de la CCC.', flags: MessageFlags.Ephemeral }).catch(() => {});
     return;
   }
-  if (i.isAutocomplete()) return autocomplete(i).catch(() => i.respond([]).catch(() => {}));
+  if (i.isAutocomplete()) {
+    if (STAFF_COMMANDS.has(i.commandName) && !isStaff(i.member)) return i.respond([]).catch(() => {});
+    return autocomplete(i).catch(() => i.respond([]).catch(() => {}));
+  }
   if (!i.isChatInputCommand()) return;
   const handler = handlers[i.commandName];
   if (!handler) return;

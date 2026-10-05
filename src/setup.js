@@ -20,8 +20,8 @@ export const COLS = {
   achat: ['C', 'D', 'E', 'F'], // Achats extérieurs
 };
 
-// Nombre de colonnes de l'onglet Contrats (A → AA)
-const CONTRATS_COLUMNS = 27;
+// Nombre de colonnes de l'onglet Contrats (A → AB)
+const CONTRATS_COLUMNS = 28;
 
 // Ligne de début des données dans "Salaires"
 export const SALAIRES_FIRST_ROW = 5;
@@ -71,6 +71,7 @@ function contratsHeader() {
     }).join('+')}+SUMIF(${A}!H2:H,A2:A,${A}!G2:G),2)`),
     arr(`Bénéfice (${env.currency})`, 'Q2:Q-V2:V'),
     ...PRODUCTS.map((p) => `Prix perso ${p.code} (${env.currency}/unité)`),
+    'Hebdomadaire (OUI)',
   ];
 }
 
@@ -88,6 +89,8 @@ async function ensureContratsColumns() {
   await gs.batchUpdate([{ appendDimension: { sheetId: p.sheetId, dimension: 'COLUMNS', length: CONTRATS_COLUMNS - p.gridProperties.columnCount } }]);
   await gs.getMeta(true);
 }
+
+const NOURRITURE_HEADER = ['Date', `Montant (${env.currency})`, 'Note', 'Par', 'Hebdomadaire (OUI)', 'ID'];
 
 const INIT = {
   async [SHEETS.PRIX](sheetId) {
@@ -130,7 +133,7 @@ const INIT = {
   },
 
   async [SHEETS.NOURRITURE](sheetId) {
-    await gs.write(`${N}!A1:D1`, [['Date', `Montant (${env.currency})`, 'Note', 'Par']]);
+    await gs.write(`${N}!A1:F1`, [NOURRITURE_HEADER]);
     return [gs.headerFormat(sheetId), gs.columnFormat(sheetId, 0, gs.DATE_TIME)];
   },
 
@@ -140,7 +143,7 @@ const INIT = {
 
   async [SHEETS.CONTRATS](sheetId) {
     await ensureContratsColumns();
-    await gs.write(`${C}!A1:AA1`, [contratsHeader()], false);
+    await gs.write(`${C}!A1:AB1`, [contratsHeader()], false);
     const list = (values, col) => ({
       setDataValidation: {
         range: { sheetId, startRowIndex: 1, startColumnIndex: col, endColumnIndex: col + 1 },
@@ -322,8 +325,9 @@ export async function ensureStructure() {
 
   // Mises à jour des formules automatiques (ajoutent les nouvelles colonnes aux Sheets existants)
   await ensureContratsColumns();
-  await gs.write(`${C}!A1:AA1`, [contratsHeader()], false);
+  await gs.write(`${C}!A1:AB1`, [contratsHeader()], false);
   await gs.write(`${L}!A1:I1`, [livraisonsHeader()], false);
+  await gs.write(`${N}!A1:F1`, [NOURRITURE_HEADER]);
   await writeStockFormulas();
   await setupRecap();
   return missing;

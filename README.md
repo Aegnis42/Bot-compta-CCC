@@ -60,7 +60,8 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 | `/contrat livrer id [cp c bc co]` | staff | Livre depuis le stock (sans quantité : le maximum possible) |
 | `/contrat voir id` · `/contrat liste` · `/contrat annuler id` | staff | Suivi des contrats |
 | `/achat fournisseur prix cp c bc co [contrat] [note]` | staff | Charbon acheté à l'extérieur (ajouté au stock, compté dans le coût matériaux) |
-| `/nourriture montant [note]` | staff | Contrat nourriture de la semaine |
+| `/nourriture montant [note] [hebdomadaire]` | staff | Contrat nourriture de la semaine (ID `NR-001`…) |
+| `/recurrents liste` · `/recurrents arreter id` | staff | Contrats hebdomadaires : avec l'option `hebdomadaire` de `/contrat creer` ou `/nourriture`, le contrat est recréé automatiquement chaque lundi à 00h (colonne « Hebdomadaire » = OUI dans le Sheet) |
 | `/charbonnier ajouter membre [nom] [salon]` | staff | Crée le salon privé + l'onglet |
 | `/charbonnier retirer membre` · `/charbonnier liste` | staff | Gestion des charbonniers |
 | `/setup [categorie]` | staff | Initialise le bot : onglets du Sheet, formules, et catégorie Discord où ranger les salons des charbonniers (créée si besoin, salons existants déplacés) |

@@ -8,7 +8,7 @@ const L = gs.q(SHEETS.LIVRAISONS);
 
 // Contrats : A ID | B Date | C Client | D Tarif | E-H commandé | I-L livré | M-P reste
 //            | Q Prix client | R Montant livré | S Statut | T Annulé | U Note | V Coût matériaux | W Bénéfice
-//            | X-AA Prix perso par unité (CP, C, BC, CO ; vide = tarif)
+//            | X-AA Prix perso par unité (CP, C, BC, CO ; vide = tarif) | AB Hebdomadaire (OUI = renouvelé chaque lundi)
 function toContract(r, i) {
   return {
     row: i + 2,
@@ -27,13 +27,15 @@ function toContract(r, i) {
     benefice: num(r[22]),
     // Prix de vente personnalisé par unité, null si le tarif s'applique
     prixPerso: Object.fromEntries(CODES.map((c, k) => [c, num(r[23 + k]) > 0 ? num(r[23 + k]) : null])),
+    hebdo: /^oui$/i.test(String(r[27] ?? '').trim()),
+    hebdoInfo: String(r[27] ?? ''),
   };
 }
 
 export const isOpen = (ct) => ct.statut !== 'Livré' && ct.statut !== 'Annulé';
 
 export async function listContracts() {
-  const rows = await gs.read(`${C}!A2:AA`, { unformatted: true });
+  const rows = await gs.read(`${C}!A2:AB`, { unformatted: true });
   return rows.map(toContract).filter((ct) => ct.id);
 }
 
@@ -55,7 +57,7 @@ export async function getStock() {
   return stock;
 }
 
-export function createContract({ client, tarif, qty, prices = {}, note = '' }) {
+export function createContract({ client, tarif, qty, prices = {}, note = '', hebdo = false }) {
   return gs.withLock(async () => {
     const rows = await gs.read(`${C}!A2:A`);
     const max = rows.reduce((m, r) => Math.max(m, Number(String(r[0] ?? '').match(/^CT-(\d+)$/i)?.[1] ?? 0)), 0);
@@ -65,7 +67,7 @@ export function createContract({ client, tarif, qty, prices = {}, note = '' }) {
     await gs.writeMany([
       { range: `${C}!A${row}:H${row}`, values: [[id, toSheetSerial(), client, tarif, ...CODES.map((c) => qty[c] || '')]] },
       { range: `${C}!U${row}`, values: [[note]] },
-      { range: `${C}!X${row}:AA${row}`, values: [CODES.map((c) => prices[c] || '')] },
+      { range: `${C}!X${row}:AB${row}`, values: [[...CODES.map((c) => prices[c] || ''), hebdo ? 'OUI' : '']] },
     ]);
     return getContract(id);
   });
@@ -125,4 +127,9 @@ export function cancelContract(id) {
     await gs.write(`${C}!T${ct.row}`, [['OUI']]);
     return getContract(ct.id);
   });
+}
+
+/** Change la colonne « Hebdomadaire » d'un contrat (OUI, vide, ou texte de suivi). */
+export function setContractWeekly(ct, value) {
+  return gs.withLock(() => gs.write(`${C}!AB${ct.row}`, [[value]]));
 }
