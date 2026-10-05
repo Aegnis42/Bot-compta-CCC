@@ -69,7 +69,7 @@ async function syncSheetToDiscord(client) {
 let lastSignature = null;
 async function syncRegistry() {
   await loadRegistry();
-  const signature = allCharbonniers().map((c) => `${c.name}|${c.tab}|${c.actif}`).join(';');
+  const signature = allCharbonniers().map((c) => `${c.name}|${c.tab}|${c.actif}|${c.citoyennete}`).join(';');
   if (signature === lastSignature) return;
   await gs.withLock(async () => {
     for (const c of allCharbonniers()) await ensureTab(c.tab);

@@ -43,7 +43,9 @@ export function weekFigures(monday, data, params) {
   const ca = sum(data.livraisons, 6);
   const rachat = data.tabs.reduce((s, t) => s + sum(t.rows, 6), 0);
   const achats = sum(data.achats, 6);
-  const fournisseurs = data.tabs.filter((t) => t.rows.some((r) => inWeek(r) && num(r[6]) > 0)).length;
+  const fournisseurs = data.tabs
+    .filter((t) => t.c?.citoyennete !== false) // citoyenneté payée seulement si OUI dans l'onglet Charbonniers
+    .filter((t) => t.rows.some((r) => inWeek(r) && num(r[6]) > 0)).length;
   const nourriture = sum(data.nourriture, 1);
 
   const cout = rachat + achats;

@@ -13,7 +13,7 @@ import { recordPurchase, recordFood } from './achats.js';
 import { listRecurring, stopRecurring } from './recurrents.js';
 import { lastWeeks } from './historique.js';
 import {
-  allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, validateName,
+  allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, setCitizenship, validateName,
   recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
 } from './charbonniers.js';
 import {
@@ -108,6 +108,9 @@ export const commandDefs = [
       .addChannelOption((o) => o.setName('salon').setDescription('Utiliser un salon existant au lieu d\'en créer un').addChannelTypes(ChannelType.GuildText)))
     .addSubcommand((s) => s.setName('retirer').setDescription('Désactiver un charbonnier (son onglet et son historique sont conservés)')
       .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord').setRequired(true)))
+    .addSubcommand((s) => s.setName('citoyennete').setDescription('Payer ou non la citoyenneté à un charbonnier quand il fournit du charbon')
+      .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord').setRequired(true))
+      .addBooleanOption((o) => o.setName('payer').setDescription('True = on lui paie la citoyenneté, False = non').setRequired(true)))
     .addSubcommand((s) => s.setName('liste').setDescription('Liste des charbonniers')),
 
   new SlashCommandBuilder().setName('setup').setDescription('Initialiser le bot : Google Sheet + catégorie des salons charbonniers')
@@ -394,9 +397,19 @@ const handlers = {
       if (!c) throw new UserError(`<@${user.id}> n'est pas un charbonnier actif.`);
       await deactivateCharbonnier(c);
       await i.editReply(`**${c.name}** est désactivé. Son onglet et son salon sont conservés (supprime le salon à la main si besoin).`);
+    } else if (sub === 'citoyennete') {
+      const user = i.options.getUser('membre', true);
+      const payer = i.options.getBoolean('payer', true);
+      const c = findByUser(user.id);
+      if (!c) throw new UserError(`<@${user.id}> n'est pas un charbonnier actif.`);
+      await setCitizenship(c, payer);
+      await i.editReply(payer
+        ? `🏛️ **${c.name}** : la citoyenneté lui est payée les semaines où il fournit du charbon.`
+        : `🚫 **${c.name}** : la citoyenneté ne lui est plus payée (il ne compte plus dans le récap).`);
     } else if (sub === 'liste') {
       const lines = allCharbonniers().map((c) =>
-        `${c.actif ? '🟢' : '⚫'} **${c.name}** — ${c.discordId ? `<@${c.discordId}>` : '?'} · ${c.channelId ? `<#${c.channelId}>` : 'pas de salon'}`);
+        `${c.actif ? '🟢' : '⚫'} **${c.name}** — ${c.discordId ? `<@${c.discordId}>` : '?'} · ${c.channelId ? `<#${c.channelId}>` : 'pas de salon'}`
+        + `${c.citoyennete ? '' : ' · 🚫 citoyenneté non payée'}${c.bonus ? ` · bonus +${ui.fmt(c.bonus)}` : ''}`);
       await i.editReply(lines.join('\n') || 'Aucun charbonnier enregistré.');
     }
   },

@@ -32,7 +32,7 @@ export function validateName(name) {
 
 /** Relit l'onglet "Charbonniers". */
 export async function loadRegistry() {
-  const rows = await gs.read(`${gs.q(SHEETS.CHARBONNIERS)}!A2:G`, { unformatted: true });
+  const rows = await gs.read(`${gs.q(SHEETS.CHARBONNIERS)}!A2:H`, { unformatted: true });
   registry = rows
     .map((r, i) => ({
       name: String(r[0] ?? '').trim(),
@@ -42,6 +42,9 @@ export async function loadRegistry() {
       actif: !/^(non|no|false|0)$/i.test(String(r[4] ?? 'OUI').trim()),
       bonus: num(r[6]),
       bonusSet: r[6] !== undefined && r[6] !== '',
+      // Citoyenneté payée quand il fournit du charbon (vide = OUI)
+      citoyennete: !/^(non|no|false|0)$/i.test(String(r[7] ?? '').trim()),
+      citoyenneteSet: r[7] !== undefined && r[7] !== '',
       row: i + 2,
     }))
     .filter((c) => c.name);
@@ -173,11 +176,24 @@ async function ensureTabColumns(title) {
 async function applyDefaultBonus() {
   const R = gs.q(SHEETS.CHARBONNIERS);
   const todo = registry.filter((c) => !c.bonusSet && BONUS_RACHAT.ids.includes(c.discordId));
+  // Colonne H : citoyenneté (OUI par défaut, écrit pour que la colonne soit lisible dans le Sheet)
+  const citoyens = registry.filter((c) => !c.citoyenneteSet);
   await gs.writeMany([
-    { range: `${R}!G1`, values: [[`Bonus rachat (${env.currency}/unité)`]] },
+    { range: `${R}!G1:H1`, values: [[`Bonus rachat (${env.currency}/unité)`, 'Citoyenneté (OUI/NON)']] },
     ...todo.map((c) => ({ range: `${R}!G${c.row}`, values: [[BONUS_RACHAT.montant]] })),
+    ...citoyens.map((c) => ({ range: `${R}!H${c.row}`, values: [['OUI']] })),
   ]);
   for (const c of todo) Object.assign(c, { bonus: BONUS_RACHAT.montant, bonusSet: true });
+  for (const c of citoyens) Object.assign(c, { citoyennete: true, citoyenneteSet: true });
+}
+
+/** Payer ou non la citoyenneté à un charbonnier quand il fournit du charbon. */
+export function setCitizenship(c, payer) {
+  return gs.withLock(async () => {
+    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!H${c.row}`, [[payer ? 'OUI' : 'NON']]);
+    await loadRegistry();
+    await rebuildFormulas();
+  });
 }
 
 const fmtN = (n) => Math.round(n).toLocaleString('fr-FR');

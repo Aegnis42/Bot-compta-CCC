@@ -221,12 +221,15 @@ const RECAP_WEEK = [
 
 /**
  * Formules du récap qui dépendent de la liste des charbonniers (réécrites par rebuildFormulas) :
- * H8 = rachat payé aux charbonniers sur la semaine, J14 = nombre de charbonniers ayant fourni du charbon.
+ * H8 = rachat payé aux charbonniers sur la semaine,
+ * J14 = nombre de charbonniers ayant fourni du charbon et à qui on paie la citoyenneté.
  */
 export function recapDynamicWrites(list) {
   const tabs = list.map((c) => gs.q(c.tab));
   const rachat = tabs.length ? `=${tabs.map((t) => `SUMIFS(${t}!G2:G,${WEEK_RANGE(`${t}!A2:A`)})`).join('+')}` : 0;
-  const count = tabs.length ? `=${tabs.map((t) => `(COUNTIFS(${WEEK_RANGE(`${t}!A2:A`)},${t}!G2:G,">0")>0)*1`).join('+')}` : 0;
+  // Citoyenneté : seulement les charbonniers marqués OUI dans l'onglet Charbonniers
+  const citoyens = list.filter((c) => c.citoyennete !== false).map((c) => gs.q(c.tab));
+  const count = citoyens.length ? `=${citoyens.map((t) => `(COUNTIFS(${WEEK_RANGE(`${t}!A2:A`)},${t}!G2:G,">0")>0)*1`).join('+')}` : 0;
   return [
     { range: `${R}!H8`, values: [[rachat]] },
     { range: `${R}!J14`, values: [[count]] },

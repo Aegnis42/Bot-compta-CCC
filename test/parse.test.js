@@ -135,3 +135,19 @@ test('historique : chiffres d\'une semaine (mêmes règles que le récap)', asyn
   assert.equal(f.taxe, 109.4);
   assert.equal(f.bat, 437.6);
 });
+
+test('citoyenneté : seuls les charbonniers marqués OUI comptent', async () => {
+  const { weekFigures } = await import('../src/historique.js');
+  const lundi = 46293;
+  const data = {
+    livraisons: [], achats: [], nourriture: [],
+    tabs: [
+      { c: { citoyennete: true }, rows: [[lundi + 1, '', 10, '', '', '', 6]] },
+      { c: { citoyennete: false }, rows: [[lundi + 1, '', 10, '', '', '', 6]] },
+    ],
+  };
+  const f = weekFigures(lundi, data, { gestion: 0.4, clan: 0.1, citoyen: 50, taxe: 0.2 });
+  assert.equal(f.fournisseurs, 1);
+  assert.equal(f.citoyennete, 50);
+  assert.equal(f.rachat, 12); // le rachat reste payé à tous
+});
