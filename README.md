@@ -27,6 +27,7 @@ Le bot crée tout seul les onglets au premier démarrage (il ne touche pas aux o
 
 | Onglet | Contenu |
 |---|---|
+| `Feuille 1` | **Récapitulatif** de la semaine (date en B3) : stock, chiffre d'affaires, coût matériaux, bénéfice, salaire gestion (40 %), salaire clan (10 %), citoyenneté (50 × charbonniers ayant fourni), contrat nourriture, bénéfice final, taxe (20 %), BAT. Pourcentages et montants modifiables en colonne I, trésorerie en B13 |
 | `Prix` | Prix de rachat et de vente (modifiables) |
 | `Charbonniers` | Nom, ID Discord, ID du salon, onglet, actif (OUI/NON) |
 | `<Nom du charbonnier>` | Un onglet par charbonnier : Date, Semaine, CP, C, BC, CO, Montant, Source, Réf, Note |
@@ -34,6 +35,8 @@ Le bot crée tout seul les onglets au premier démarrage (il ne touche pas aux o
 | `Stock` | Déposé, ajustement manuel (colonne D), livré, stock actuel, reste à livrer, à produire |
 | `Contrats` | ID, client, tarif, quantités commandées / livrées / restantes, montants, statut |
 | `Livraisons` | Historique des livraisons de contrats |
+| `Achats` | Charbon acheté ailleurs qu'à nos charbonniers : entre dans le stock ; rattaché à un contrat, son prix remplace le prix de rachat dans le coût matériaux du contrat |
+| `Nourriture` | Contrats nourriture, déduits du bénéfice de la semaine |
 
 Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des formules : **ne pas écrire dedans**.
 
@@ -56,6 +59,8 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 | `/contrat creer client tarif cp c bc co [note]` | staff | Nouveau contrat (ID auto `CT-001`…) |
 | `/contrat livrer id [cp c bc co]` | staff | Livre depuis le stock (sans quantité : le maximum possible) |
 | `/contrat voir id` · `/contrat liste` · `/contrat annuler id` | staff | Suivi des contrats |
+| `/achat fournisseur prix cp c bc co [contrat] [note]` | staff | Charbon acheté à l'extérieur (ajouté au stock, compté dans le coût matériaux) |
+| `/nourriture montant [note]` | staff | Contrat nourriture de la semaine |
 | `/charbonnier ajouter membre [nom] [salon]` | staff | Crée le salon privé + l'onglet |
 | `/charbonnier retirer membre` · `/charbonnier liste` | staff | Gestion des charbonniers |
 | `/setup [categorie]` | staff | Initialise le bot : onglets du Sheet, formules, et catégorie Discord où ranger les salons des charbonniers (créée si besoin, salons existants déplacés) |
