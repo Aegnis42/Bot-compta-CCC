@@ -27,7 +27,7 @@ Le bot crée tout seul les onglets au premier démarrage (il ne touche pas aux o
 
 | Onglet | Contenu |
 |---|---|
-| `Feuille 1` | **Récapitulatif** de la semaine (date en B3) : stock, chiffre d'affaires, coût matériaux, bénéfice, salaire gestion (40 %), salaire clan (10 %), citoyenneté (50 × charbonniers ayant fourni), contrat nourriture, bénéfice final, taxe (20 %), BAT. Pourcentages et montants modifiables en colonne I, trésorerie en B13 |
+| `Feuille 1` | **Récapitulatif** de la semaine en cours (lundi → dimanche) : stock, chiffre d'affaires, coût matériaux, bénéfice, salaire gestion (40 %), salaire clan (10 %), citoyenneté (50 × charbonniers ayant fourni), contrat nourriture, bénéfice final, taxe (20 %), BAT. Pourcentages et montants modifiables en colonne I, trésorerie en B13 |
 | `Prix` | Prix de rachat et de vente (modifiables) |
 | `Charbonniers` | Nom, ID Discord, ID du salon, onglet, actif (OUI/NON) |
 | `<Nom du charbonnier>` | Un onglet par charbonnier : Date, Semaine, CP, C, BC, CO, Montant, Source, Réf, Note |

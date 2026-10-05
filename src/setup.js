@@ -190,8 +190,14 @@ async function writeStockFormulas() {
 
 // ---------- Récapitulatif (Feuille 1) ----------
 
-const RECAP_VERSION = '1';
-const WEEK_RANGE = (col) => `${col},">="&$Z$1,${col},"<"&$Z$2`; // critères SUMIFS « dans la semaine affichée »
+const RECAP_VERSION = '2';
+const WEEK_RANGE = (col) => `${col},">="&$Z$1,${col},"<"&$Z$2`; // critères SUMIFS « dans la semaine en cours »
+
+// Le récap porte toujours sur la semaine en cours (lundi → dimanche) : Z1 = lundi, Z2 = lundi suivant
+const RECAP_WEEK = [
+  { range: `${R}!A3:C4`, values: [['Semaine en cours', '=TEXT($Z$1,"dd/mm/yyyy")&" au "&TEXT($Z$1+6,"dd/mm/yyyy")', ''], ['', '', '']] },
+  { range: `${R}!Z1:Z2`, values: [['=INT(TODAY())-WEEKDAY(TODAY(),2)+1'], ['=$Z$1+7']] },
+];
 
 /**
  * Formules du récap qui dépendent de la liste des charbonniers (réécrites par rebuildFormulas) :
@@ -210,11 +216,19 @@ export function recapDynamicWrites(list) {
 /**
  * Met en page le récapitulatif sur « Feuille 1 », une seule fois (version notée dans Config).
  * Si la feuille contenait déjà quelque chose, elle est d'abord copiée dans « Feuille 1 (ancienne) ».
- * Les cases de saisie (semaine, trésorerie, pourcentages) ne sont plus jamais réécrites ensuite.
+ * Les cases de saisie (trésorerie, pourcentages) ne sont plus jamais réécrites ensuite.
  */
 async function setupRecap() {
   await loadSettings();
-  if (getSetting('recap_version') === RECAP_VERSION) return false;
+  const version = getSetting('recap_version');
+  if (version === RECAP_VERSION) return false;
+  if (version === '1') {
+    // Version 1 : la semaine se choisissait en B3. On passe à « toujours la semaine en cours »
+    // sans toucher au reste (trésorerie, pourcentages).
+    await gs.writeMany(RECAP_WEEK, false);
+    await setSetting('recap_version', RECAP_VERSION);
+    return true;
+  }
 
   const props = await gs.sheetProps(SHEETS.RECAP);
   const existing = await gs.read(`${R}!A1:Z100`);
@@ -238,11 +252,7 @@ async function setupRecap() {
 
   await gs.writeMany([
     { range: `${R}!A1`, values: [['📊 Récapitulatif de la CCC']] },
-    { range: `${R}!A3:C4`, values: [
-      ['Semaine à afficher', '', '← une date de la semaine voulue (vide = semaine en cours)'],
-      ['Semaine affichée', '=TEXT($Z$1,"dd/mm/yyyy")&" au "&TEXT($Z$1+6,"dd/mm/yyyy")', ''],
-    ] },
-    { range: `${R}!Z1:Z2`, values: [['=INT(IF($B$3="",TODAY(),$B$3))-WEEKDAY(IF($B$3="",TODAY(),$B$3),2)+1'], ['=$Z$1+7']] },
+    ...RECAP_WEEK,
 
     { range: `${R}!A6:E11`, values: [['📦 Stock'], ['Produit', 'Stock', 'Niveau', 'Reste à livrer', 'À produire'], ...stockRows] },
     { range: `${R}!A13:B13`, values: [[`Septimes (trésorerie)`, '']] },
@@ -272,9 +282,8 @@ async function setupRecap() {
   });
   await gs.batchUpdate([
     { updateSheetProperties: { properties: { sheetId: props.sheetId, title: SHEETS.RECAP, index: 0, gridProperties: { frozenRowCount: 4 } }, fields: 'index,gridProperties.frozenRowCount' } },
-    bold(0, 1, 0, 1), bold(2, 4, 0, 1), bold(5, 7, 0, 5), bold(5, 6, 6, 9), bold(12, 13, 0, 1),
+    bold(0, 1, 0, 1), bold(2, 3, 0, 2), bold(5, 7, 0, 5), bold(5, 6, 6, 9), bold(12, 13, 0, 1),
     bold(10, 11, 6, 8), bold(15, 16, 6, 8), bold(17, 18, 6, 8),
-    fmt(2, 3, 1, 2, { type: 'DATE', pattern: 'dd/mm/yyyy' }),
     fmt(6, 18, 7, 8, { type: 'NUMBER', pattern: '#,##0.00' }),
     fmt(11, 13, 8, 9, { type: 'PERCENT', pattern: '0%' }),
     fmt(16, 17, 8, 9, { type: 'PERCENT', pattern: '0%' }),
