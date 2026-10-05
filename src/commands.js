@@ -9,6 +9,7 @@ import { ensureStructure } from './setup.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
 import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
 import { sendPayNotices } from './sync.js';
+import { recordPurchase, recordFood } from './achats.js';
 import {
   allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, validateName,
   recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
@@ -78,6 +79,16 @@ export const commandDefs = [
     .addSubcommand((s) => s.setName('liste').setDescription('Contrats en cours'))
     .addSubcommand((s) => s.setName('annuler').setDescription('Annuler un contrat').addStringOption(contractIdOption)),
 
+  addQtyOptions(new SlashCommandBuilder().setName('achat').setDescription('Enregistrer du charbon acheté ailleurs qu\'à nos charbonniers (entre dans le stock)')
+    .addStringOption((o) => o.setName('fournisseur').setDescription('Chez qui le charbon a été acheté').setRequired(true))
+    .addNumberOption((o) => o.setName('prix').setDescription(`Prix total payé (${env.currency})`).setRequired(true).setMinValue(0)))
+    .addStringOption((o) => o.setName('contrat').setDescription('Contrat pour lequel ce charbon a été acheté (optionnel)').setAutocomplete(true))
+    .addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)')),
+
+  new SlashCommandBuilder().setName('nourriture').setDescription('Enregistrer un contrat nourriture (déduit du bénéfice de la semaine)')
+    .addNumberOption((o) => o.setName('montant').setDescription(`Montant payé (${env.currency})`).setRequired(true).setMinValue(0))
+    .addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)')),
+
   new SlashCommandBuilder().setName('charbonnier').setDescription('Gestion des charbonniers')
     .addSubcommand((s) => s.setName('ajouter').setDescription('Ajouter un charbonnier (crée son salon et son onglet)')
       .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord').setRequired(true))
@@ -104,7 +115,7 @@ export const isStaff = (member) =>
   );
 
 // Commandes réservées au staff (vérifiées par le bot avant exécution)
-const STAFF_COMMANDS = new Set(['stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
+const STAFF_COMMANDS = new Set(['achat', 'nourriture', 'stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
 
 /** Prix perso saisis dans la commande : { CP: 0.9, ... } (seulement les options renseignées). */
 function readPrices(i) {
@@ -222,6 +233,34 @@ const handlers = {
     const week = weekFrom(i);
     const sent = await sendPayNotices(i.client, week);
     await i.editReply(sent ? `✅ ${sent} avis de paie envoyé(s) pour la semaine du ${week}.` : `Aucun charbonnier n'a de salaire pour la semaine du ${week}.`);
+  },
+
+  async achat(i) {
+    const qty = readQty(i);
+    if (!hasQty(qty)) throw new UserError('Indique au moins une quantité achetée (`cp`, `c`, `bc` ou `co`).');
+    const prix = i.options.getNumber('prix', true);
+    const { contract } = await recordPurchase({
+      fournisseur: i.options.getString('fournisseur', true).slice(0, 100),
+      qty,
+      prix,
+      contrat: i.options.getString('contrat'),
+      par: i.user.username,
+      note: i.options.getString('note') ?? '',
+    });
+    scheduleStockRefresh();
+    const lines = [`🛒 Achat enregistré : ${ui.qtyInline(qty)} pour **${ui.money(prix)}** chez **${i.options.getString('fournisseur', true)}**. Ajouté au stock.`];
+    const embeds = [];
+    if (contract) {
+      lines.push(`Rattaché au contrat **${contract.id}** : son coût matériaux tient compte de ce prix.`);
+      embeds.push(ui.contractEmbed(contract, await getStock()));
+    }
+    await i.editReply({ content: lines.join('\n'), embeds });
+  },
+
+  async nourriture(i) {
+    const montant = i.options.getNumber('montant', true);
+    await recordFood({ montant, note: i.options.getString('note') ?? '', par: i.user.username });
+    await i.editReply(`🍖 Contrat nourriture enregistré : **${ui.money(montant)}**, déduit du bénéfice de la semaine (récap Feuille 1).`);
   },
 
   async salaires(i) {

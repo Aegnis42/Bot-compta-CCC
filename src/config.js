@@ -79,4 +79,7 @@ export const SHEETS = {
   CONTRATS: 'Contrats',
   LIVRAISONS: 'Livraisons',
   CONFIG: 'Config',
+  ACHATS: 'Achats',
+  NOURRITURE: 'Nourriture',
+  RECAP: 'Feuille 1',
 };

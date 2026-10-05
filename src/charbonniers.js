@@ -1,7 +1,8 @@
 import { env, PRODUCTS, SHEETS, STOCK_MAX, BONUS_RACHAT, overCapacity } from './config.js';
 import { getStock } from './contrats.js';
 import * as gs from './sheets.js';
-import { COLS, SALAIRES_FIRST_ROW, weekFormula, salairesHeader } from './setup.js';
+import { COLS, SALAIRES_FIRST_ROW, weekFormula, salairesHeader, recapDynamicWrites } from './setup.js';
+import { getSetting } from './settings.js';
 import { toSheetSerial, weekOfSerial } from './time.js';
 import { UserError, num, qtyFrom, emptyQty, addQty, lastDataRow, newRef, round2 } from './utils.js';
 
@@ -115,6 +116,9 @@ export async function rebuildFormulas() {
     list.length ? `=${list.map((c) => `SUM(${gs.q(c.tab)}!${col}2:${col})`).join('+')}` : 0,
   ]);
   await gs.write(`${gs.q(SHEETS.STOCK)}!C2:C${PRODUCTS.length + 1}`, stock, false);
+
+  // Récap (Feuille 1) : rachat de la semaine et nombre de charbonniers ayant fourni, une fois le récap mis en page
+  if (getSetting('recap_version')) await gs.writeMany(recapDynamicWrites(list), false);
 }
 
 export function addCharbonnier({ name, discordId, channelId }) {

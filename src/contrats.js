@@ -44,12 +44,12 @@ export async function getContract(id) {
 
 /** Stock par code produit, lu dans l'onglet "Stock" (calculé par formules). */
 export async function getStock() {
-  const rows = await gs.read(`${gs.q(SHEETS.STOCK)}!A2:H${PRODUCTS.length + 1}`, { unformatted: true });
+  const rows = await gs.read(`${gs.q(SHEETS.STOCK)}!A2:I${PRODUCTS.length + 1}`, { unformatted: true });
   const stock = {};
   for (const r of rows) {
     const code = String(r[1] ?? '').trim().toUpperCase();
     if (!CODES.includes(code)) continue;
-    stock[code] = { depose: num(r[2]), ajust: num(r[3]), livre: num(r[4]), stock: num(r[5]), reste: num(r[6]), aProduire: num(r[7]) };
+    stock[code] = { depose: num(r[2]), ajust: num(r[3]), livre: num(r[4]), stock: num(r[5]), reste: num(r[6]), aProduire: num(r[7]), achete: num(r[8]) };
   }
   for (const code of CODES) stock[code] ??= { depose: 0, ajust: 0, livre: 0, stock: 0, reste: 0, aProduire: 0 };
   return stock;
