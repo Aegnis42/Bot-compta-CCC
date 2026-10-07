@@ -59,9 +59,10 @@ test('heure de la paie : dimanche à partir de 17h', async () => {
 test('niveaux de stock (CP et C uniquement)', async () => {
   const { stockLevel } = await import('../src/config.js');
   const icon = (code, n) => stockLevel(code, n)?.icon ?? null;
-  assert.equal(icon('C', 4000), '🔒');
-  assert.equal(icon('C', 5200), '🔒');
-  assert.equal(icon('CP', 3999), '🟢');
+  assert.equal(icon('C', 6000), '🔒');
+  assert.equal(icon('C', 5999), '🟢');
+  assert.equal(icon('C', 7200), '🔒');
+  assert.equal(icon('CP', 4000), '🟢');
   assert.equal(icon('CP', 2000), '🟢');
   assert.equal(icon('C', 1999), '🟠');
   assert.equal(icon('C', 1000), '🟠');
@@ -71,13 +72,14 @@ test('niveaux de stock (CP et C uniquement)', async () => {
   assert.equal(icon('CO', 5000), null);
 });
 
-test('stock plein : dépôts refusés une fois 4000 atteint (CP et C)', async () => {
+test('stock plein : dépôts refusés une fois 6000 atteint (CP et C)', async () => {
   const { overCapacity } = await import('../src/config.js');
   const q = (CP = 0, C = 0, BC = 0, CO = 0) => ({ CP, C, BC, CO });
-  assert.deepEqual(overCapacity(q(1000), { CP: 3900 }), []); // dépasse 4000 : accepté
-  assert.deepEqual(overCapacity(q(10), { CP: 3999 }), []);
-  assert.deepEqual(overCapacity(q(10), { CP: 4000 }), [{ code: 'CP', stock: 4000 }]); // déjà plein : refusé
-  assert.deepEqual(overCapacity(q(0, 10), { C: 4200 }), [{ code: 'C', stock: 4200 }]);
+  assert.deepEqual(overCapacity(q(1000), { CP: 5900 }), []); // dépasse 6000 : accepté
+  assert.deepEqual(overCapacity(q(10), { CP: 5999 }), []);
+  assert.deepEqual(overCapacity(q(10), { CP: 4500 }), []); // ancien plafond : accepté
+  assert.deepEqual(overCapacity(q(10), { CP: 6000 }), [{ code: 'CP', stock: 6000 }]); // déjà plein : refusé
+  assert.deepEqual(overCapacity(q(0, 10), { C: 6200 }), [{ code: 'C', stock: 6200 }]);
   assert.deepEqual(overCapacity(q(0, 10), { CP: 5000, C: 100 }), []); // CP plein mais rien déposé en CP
   assert.deepEqual(overCapacity(q(0, 0, 9999, 9999), { BC: 9000, CO: 9000 }), []); // BC/CO sans plafond
 });

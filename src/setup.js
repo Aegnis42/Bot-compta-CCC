@@ -236,6 +236,18 @@ export function recapDynamicWrites(list) {
   ];
 }
 
+/** Bloc stock du récap (A8:E11) : produit, stock, niveau (paliers de STOCK_LEVELS), reste à livrer, à produire. */
+function recapStockRows() {
+  const S = gs.q(SHEETS.STOCK);
+  const lv = STOCK_LEVELS.levels;
+  const levelFormula = (cell) =>
+    `=IF(${cell}>=${lv[0].min},"${lv[0].icon}",IF(${cell}>=${lv[1].min},"${lv[1].icon}",IF(${cell}>=${lv[2].min},"${lv[2].icon}","${lv[3].icon}")))`;
+  return PRODUCTS.map((p, i) => {
+    const r = i + 2;
+    return [`=${S}!A${r}`, `=${S}!F${r}`, STOCK_LEVELS.codes.includes(p.code) ? levelFormula(`B${8 + i}`) : '', `=${S}!G${r}`, `=${S}!H${r}`];
+  });
+}
+
 /**
  * Met en page le récapitulatif sur « Feuille 1 », une seule fois (version notée dans Config).
  * Si la feuille contenait déjà quelque chose, elle est d'abord copiée dans « Feuille 1 (ancienne) ».
@@ -263,14 +275,7 @@ async function setupRecap() {
     await gs.batchUpdate([{ updateCells: { range: { sheetId: props.sheetId }, fields: 'userEnteredValue,userEnteredFormat' } }]);
   }
 
-  const S = gs.q(SHEETS.STOCK);
-  const lv = STOCK_LEVELS.levels;
-  const levelFormula = (cell) =>
-    `=IF(${cell}>=${lv[0].min},"${lv[0].icon}",IF(${cell}>=${lv[1].min},"${lv[1].icon}",IF(${cell}>=${lv[2].min},"${lv[2].icon}","${lv[3].icon}")))`;
-  const stockRows = PRODUCTS.map((p, i) => {
-    const r = i + 2;
-    return [`=${S}!A${r}`, `=${S}!F${r}`, STOCK_LEVELS.codes.includes(p.code) ? levelFormula(`B${8 + i}`) : '', `=${S}!G${r}`, `=${S}!H${r}`];
-  });
+  const stockRows = recapStockRows();
   const sumWeek = (sheet, col) => `=SUMIFS(${sheet}!${col}2:${col},${WEEK_RANGE(`${sheet}!A2:A`)})`;
 
   await gs.writeMany([
@@ -350,5 +355,7 @@ export async function ensureStructure() {
   await gs.write(`${N}!A1:F1`, [NOURRITURE_HEADER]);
   await writeStockFormulas();
   await setupRecap();
+  // Bloc stock du récap réécrit à chaque fois (pas de saisie dedans) : suit les paliers de STOCK_LEVELS
+  await gs.write(`${R}!A8:E${7 + PRODUCTS.length}`, recapStockRows(), false);
   return missing;
 }
