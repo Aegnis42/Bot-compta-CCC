@@ -92,6 +92,8 @@ test('accès staff : compte autorisé, admins, rôle staff', async () => {
   assert.equal(isStaff(member('1222839727934279692')), true);
   assert.equal(isStaff(member('42', { admin: true })), true);
   assert.equal(isStaff(member('42')), false);
+  assert.equal(isStaff(member('42', { roles: ['1551416821998161990'] })), true); // rôle autorisé
+  assert.equal(isStaff(member('42', { roles: ['999'] })), false);
   assert.equal(isStaff(null), false);
 });
 

@@ -68,7 +68,7 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 | `/charbonnier retirer membre` · `/charbonnier liste` | staff | Gestion des charbonniers |
 | `/setup [categorie]` | staff | Initialise le bot : onglets du Sheet, formules, et catégorie Discord où ranger les salons des charbonniers (créée si besoin, salons existants déplacés) |
 
-« Staff » = permission *Gérer le serveur*, le rôle `STAFF_ROLE_ID`, ou un compte listé dans `ADMIN_IDS` (le compte `1222839727934279692` est autorisé par défaut). Les commandes staff sont visibles par tous mais le bot refuse les autres membres.
+« Staff » = permission *Gérer le serveur*, le rôle `STAFF_ROLE_ID`, un rôle listé dans `ADMIN_ROLE_IDS` (le rôle 🏛️ Intendant `1551416821998161990` est autorisé par défaut) ou un compte listé dans `ADMIN_IDS` (le compte `1222839727934279692` est autorisé par défaut). Les commandes staff sont visibles par tous mais le bot refuse les autres membres.
 
 ## Installation
 
