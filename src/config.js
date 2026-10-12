@@ -24,8 +24,8 @@ export const env = {
 // Ordre = ordre des colonnes partout dans le Google Sheet.
 // Les prix ci-dessous ne servent qu'à initialiser l'onglet "Prix" : ensuite c'est le Sheet qui fait foi.
 export const PRODUCTS = [
-  { code: 'CP', name: 'Charbon Pauvre', rachat: 0.6, normal: 1, chatelerie: 0.8 },
-  { code: 'C', name: 'Charbon', rachat: 1.2, normal: 2, chatelerie: 1.5 },
+  { code: 'CP', name: 'Charbon Pauvre', rachat: 0.4, normal: 1, chatelerie: 0.8 },
+  { code: 'C', name: 'Charbon', rachat: 1, normal: 2, chatelerie: 1.5 },
   { code: 'BC', name: 'Briquette', rachat: 1.8, normal: 3, chatelerie: 2.5 },
   { code: 'CO', name: 'Coke', rachat: 3.2, normal: 6, chatelerie: 5 },
 ];
