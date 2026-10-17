@@ -20,8 +20,8 @@ export const COLS = {
   achat: ['C', 'D', 'E', 'F'], // Achats extérieurs
 };
 
-// Nombre de colonnes de l'onglet Contrats (A → AB)
-const CONTRATS_COLUMNS = 28;
+// Nombre de colonnes de l'onglet Contrats (A → AD)
+const CONTRATS_COLUMNS = 30;
 
 // Ligne de début des données dans "Salaires"
 export const SALAIRES_FIRST_ROW = 5;
@@ -72,6 +72,7 @@ function contratsHeader() {
     arr(`Bénéfice (${env.currency})`, 'Q2:Q-V2:V'),
     ...PRODUCTS.map((p) => `Prix perso ${p.code} (${env.currency}/unité)`),
     'Hebdomadaire (OUI)',
+    'Lieu de livraison', 'Client Discord (ID)',
   ];
 }
 
@@ -160,7 +161,7 @@ const INIT = {
 
   async [SHEETS.CONTRATS](sheetId) {
     await ensureContratsColumns();
-    await gs.write(`${C}!A1:AB1`, [contratsHeader()], false);
+    await gs.write(`${C}!A1:AD1`, [contratsHeader()], false);
     const list = (values, col) => ({
       setDataValidation: {
         range: { sheetId, startRowIndex: 1, startColumnIndex: col, endColumnIndex: col + 1 },
@@ -350,7 +351,7 @@ export async function ensureStructure() {
 
   // Mises à jour des formules automatiques (ajoutent les nouvelles colonnes aux Sheets existants)
   await ensureContratsColumns();
-  await gs.write(`${C}!A1:AB1`, [contratsHeader()], false);
+  await gs.write(`${C}!A1:AD1`, [contratsHeader()], false);
   await gs.write(`${L}!A1:I1`, [livraisonsHeader()], false);
   await gs.write(`${N}!A1:F1`, [NOURRITURE_HEADER]);
   await writeStockFormulas();

@@ -48,6 +48,8 @@ export async function renewAll() {
       prices: Object.fromEntries(Object.entries(ct.prixPerso).filter(([, v]) => v)),
       note: ct.note,
       hebdo: true,
+      lieu: ct.lieu,
+      clientId: ct.clientId,
     });
     await setContractWeekly(ct, `Renouvelé → ${copy.id}`);
     lines.push(`📜 **${copy.id}** — ${copy.client} : ${ui.qtyInline(copy.cmd)} (${ui.money(copy.montant)}) _(suite de ${ct.id})_`);

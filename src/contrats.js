@@ -9,6 +9,7 @@ const L = gs.q(SHEETS.LIVRAISONS);
 // Contrats : A ID | B Date | C Client | D Tarif | E-H commandé | I-L livré | M-P reste
 //            | Q Prix client | R Montant livré | S Statut | T Annulé | U Note | V Coût matériaux | W Bénéfice
 //            | X-AA Prix perso par unité (CP, C, BC, CO ; vide = tarif) | AB Hebdomadaire (OUI = renouvelé chaque lundi)
+//            | AC Lieu de livraison | AD Client Discord (ID, pour les commandes passées sur Discord)
 function toContract(r, i) {
   return {
     row: i + 2,
@@ -29,13 +30,15 @@ function toContract(r, i) {
     prixPerso: Object.fromEntries(CODES.map((c, k) => [c, num(r[23 + k]) > 0 ? num(r[23 + k]) : null])),
     hebdo: /^oui$/i.test(String(r[27] ?? '').trim()),
     hebdoInfo: String(r[27] ?? ''),
+    lieu: String(r[28] ?? ''),
+    clientId: String(r[29] ?? '').trim(),
   };
 }
 
 export const isOpen = (ct) => ct.statut !== 'Livré' && ct.statut !== 'Annulé';
 
 export async function listContracts() {
-  const rows = await gs.read(`${C}!A2:AB`, { unformatted: true });
+  const rows = await gs.read(`${C}!A2:AD`, { unformatted: true });
   return rows.map(toContract).filter((ct) => ct.id);
 }
 
@@ -57,7 +60,7 @@ export async function getStock() {
   return stock;
 }
 
-export function createContract({ client, tarif, qty, prices = {}, note = '', hebdo = false }) {
+export function createContract({ client, tarif, qty, prices = {}, note = '', hebdo = false, lieu = '', clientId = '' }) {
   return gs.withLock(async () => {
     const rows = await gs.read(`${C}!A2:A`);
     const max = rows.reduce((m, r) => Math.max(m, Number(String(r[0] ?? '').match(/^CT-(\d+)$/i)?.[1] ?? 0)), 0);
@@ -67,7 +70,7 @@ export function createContract({ client, tarif, qty, prices = {}, note = '', heb
     await gs.writeMany([
       { range: `${C}!A${row}:H${row}`, values: [[id, toSheetSerial(), client, tarif, ...CODES.map((c) => qty[c] || '')]] },
       { range: `${C}!U${row}`, values: [[note]] },
-      { range: `${C}!X${row}:AB${row}`, values: [[...CODES.map((c) => prices[c] || ''), hebdo ? 'OUI' : '']] },
+      { range: `${C}!X${row}:AD${row}`, values: [[...CODES.map((c) => prices[c] || ''), hebdo ? 'OUI' : '', lieu, clientId]] },
     ]);
     return getContract(id);
   });

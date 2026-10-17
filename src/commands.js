@@ -16,6 +16,7 @@ import {
 import { handlePanelInteraction, schedulePanelRefresh } from './panel.js';
 import { isStaff } from './access.js';
 import { handleDepositMenu } from './depositMenu.js';
+import { handleOrderInteraction } from './orders.js';
 import {
   findByChannel, findByUser, setCitizenship, recordDeposit, deleteDeposit, weekSummary, salariesForWeek,
 } from './charbonniers.js';
@@ -386,6 +387,7 @@ export async function handleInteraction(i) {
   }
   if (await handlePanelInteraction(i)) return;
   if (await handleDepositMenu(i)) return;
+  if (await handleOrderInteraction(i)) return;
   if (!i.isChatInputCommand()) return;
   const handler = handlers[i.commandName];
   if (!handler) return;

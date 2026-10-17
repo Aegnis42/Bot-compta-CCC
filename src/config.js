@@ -18,6 +18,10 @@ export const env = {
   recapChannelId: process.env.RECAP_CHANNEL_ID || null,
   // Salon du panneau de gestion
   panelChannelId: process.env.PANEL_CHANNEL_ID || '1560869948589351012',
+  // Prise de commande : salon public du panneau client, et tarif selon le rôle du client
+  orderChannelId: process.env.ORDER_CHANNEL_ID || '1560871503380349030',
+  chatelerieRoleIds: ['1551415729658527846'], // Client Crevasse → prix Chatelerie
+  normalRoleIds: ['1560875137526669313'], // Client Extérieur → prix normal
   syncInterval: Math.max(15, Number(process.env.SYNC_INTERVAL_SECONDS) || 30),
   tz: process.env.TIMEZONE || 'Europe/Paris',
   currency: 'septimes',

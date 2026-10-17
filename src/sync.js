@@ -13,6 +13,7 @@ import { weeklyRenewal } from './recurrents.js';
 import { weeklyHistory } from './historique.js';
 import { periodicPanelRefresh } from './panel.js';
 import { bumpDepositMenu } from './depositMenu.js';
+import { periodicOrderPanel } from './orders.js';
 
 // ---------- Google Sheet → Discord ----------
 
@@ -140,6 +141,7 @@ export function startSync(client) {
       await weeklyRenewal(client);
       await weeklyHistory(client);
       await periodicPanelRefresh(client);
+      await periodicOrderPanel(client);
       await updateStockChannels(client);
     } catch (e) {
       console.error('[sync]', e.message);

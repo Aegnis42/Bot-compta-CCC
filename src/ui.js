@@ -111,6 +111,9 @@ export function contractEmbed(ct, stock) {
     .addFields(
       { name: 'Statut', value: `${STATUS_ICON[ct.statut] ?? ''} ${ct.statut || '?'}${ct.hebdo ? '\n🔁 Hebdomadaire' : ''}`, inline: true },
       { name: 'Valeur déjà livrée', value: `${money(ct.montantLivre)} / ${money(ct.montant)}`, inline: true },
+      ...(ct.lieu || ct.clientId
+        ? [{ name: '📍 Livraison', value: [ct.lieu, ct.clientId ? `Commandé par <@${ct.clientId}>` : ''].filter(Boolean).join('\n'), inline: true }]
+        : []),
       { name: 'Livraison', value: suivi.join('\n') || '—' },
     );
   if (ct.note) embed.addFields({ name: 'Note', value: ct.note.slice(0, 1000) });
