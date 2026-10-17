@@ -45,6 +45,10 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 
 **Semaines** : du lundi au dimanche, notées `28/09/2026 au 04/10/2026`. Dans les commandes, l'option `semaine` accepte n'importe quel jour de la semaine (`29/09`) ou `derniere`.
 
+## Menu de dépôt (salons des charbonniers)
+
+Chaque salon de charbonnier contient un menu avec **⛏️ Déclarer un dépôt** (formulaire avec une case par charbon : CP, C, BC, CO), **📊 Ma semaine** et **↩️ Annuler mon dernier dépôt**. Le menu est reposté en bas du salon après chaque dépôt. Seuls le charbonnier et le staff peuvent l'utiliser. Écrire `300 CP` dans le salon fonctionne toujours.
+
 ## Panneau de gestion
 
 Dans le salon `PANEL_CHANNEL_ID` (par défaut `1560869948589351012`), le bot affiche un panneau (Components V2) avec un résumé en direct (stock, semaine, contrats en cours) et des boutons qui ouvrent des formulaires :

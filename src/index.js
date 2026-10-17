@@ -6,7 +6,9 @@ import { loadRegistry, findByChannel } from './charbonniers.js';
 import { loadPrices } from './prices.js';
 import { loadSettings } from './settings.js';
 import { parseQuantities } from './parse.js';
-import { commandDefs, handleInteraction, depositAndEmbed } from './commands.js';
+import { commandDefs, handleInteraction } from './commands.js';
+import { depositAndEmbed } from './actions.js';
+import { ensureAllDepositMenus, bumpDepositMenu } from './depositMenu.js';
 import { startSync } from './sync.js';
 import { setStockClient } from './stockChannels.js';
 import * as ui from './ui.js';
@@ -52,6 +54,7 @@ client.once(Events.ClientReady, async (c) => {
   }
   setStockClient(client);
   startSync(client);
+  ensureAllDepositMenus(client).catch((e) => console.warn('[menu]', e.message));
 });
 
 // Dépôt déclaré par simple message dans le salon d'un charbonnier
@@ -72,6 +75,7 @@ client.on(Events.MessageCreate, async (msg) => {
     const embed = await depositAndEmbed(c, qty, `${msg.author.username} : ${msg.content}`);
     await msg.react('✅').catch(() => {});
     await msg.reply({ embeds: [embed], allowedMentions: { repliedUser: false } });
+    bumpDepositMenu(client, c);
   } catch (e) {
     if (!(e instanceof UserError)) console.error('[message]', e);
     await msg.react(e instanceof UserError ? '🔒' : '❌').catch(() => {});

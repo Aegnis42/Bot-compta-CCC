@@ -11,10 +11,11 @@ import { recordPurchase, recordFood } from './achats.js';
 import { listRecurring, stopRecurring } from './recurrents.js';
 import { lastWeeks } from './historique.js';
 import {
-  addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow,
+  addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow, depositAndEmbed,
 } from './actions.js';
 import { handlePanelInteraction, schedulePanelRefresh } from './panel.js';
 import { isStaff } from './access.js';
+import { handleDepositMenu } from './depositMenu.js';
 import {
   findByChannel, findByUser, setCitizenship, recordDeposit, deleteDeposit, weekSummary, salariesForWeek,
 } from './charbonniers.js';
@@ -164,14 +165,6 @@ function weekFrom(i) {
 }
 
 // ---------- Handlers ----------
-
-/** Enregistre un dépôt et renvoie l'embed de confirmation (partagé avec les messages texte). */
-export async function depositAndEmbed(c, qty, note) {
-  const res = await recordDeposit(c, qty, { source: 'Discord', note });
-  scheduleStockRefresh();
-  const weekSum = await weekSummary(c, res.week);
-  return ui.depositEmbed({ c, qty, montant: rachatValue(qty, c.bonus), ref: res.ref, week: res.week, weekSum, title: '✅ Dépôt enregistré' });
-}
 
 const handlers = {
   async depot(i) {
@@ -392,6 +385,7 @@ export async function handleInteraction(i) {
     return autocomplete(i).catch(() => i.respond([]).catch(() => {}));
   }
   if (await handlePanelInteraction(i)) return;
+  if (await handleDepositMenu(i)) return;
   if (!i.isChatInputCommand()) return;
   const handler = handlers[i.commandName];
   if (!handler) return;

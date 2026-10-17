@@ -4,15 +4,26 @@ import { UserError } from './utils.js';
 import { ensureStructure } from './setup.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
 import { loadPrices } from './prices.js';
-import { setupStockChannels } from './stockChannels.js';
+import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
+import { rachatValue } from './prices.js';
 import {
   allCharbonniers, findByUser, addCharbonnier, deactivateCharbonnier, validateName, loadRegistry, rebuildFormulas,
+  recordDeposit, weekSummary,
 } from './charbonniers.js';
 import * as ui from './ui.js';
+import { ensureDepositMenu } from './depositMenu.js';
 
 // Actions partagées par les commandes slash et le panneau de gestion.
 
 export const CATEGORY_KEY = 'categorie_charbonniers';
+
+/** Enregistre un dépôt et renvoie l'embed de confirmation (messages, commandes, menu de dépôt, panneau). */
+export async function depositAndEmbed(c, qty, note) {
+  const res = await recordDeposit(c, qty, { source: 'Discord', note });
+  scheduleStockRefresh();
+  const weekSum = await weekSummary(c, res.week);
+  return ui.depositEmbed({ c, qty, montant: rachatValue(qty, c.bonus), ref: res.ref, week: res.week, weekSum, title: '✅ Dépôt enregistré' });
+}
 
 /** Catégorie des salons charbonniers (réglée par /setup ou le panneau), si elle existe toujours. */
 export async function charbonnierCategory(guild) {
@@ -65,6 +76,7 @@ export async function addCharbonnierFlow({ guild, client, user, name: wanted, ch
   }
   const c = await addCharbonnier({ name, discordId: user.id, channelId: channel.id });
   await channel.send({ content: `<@${user.id}>`, embeds: [ui.welcomeEmbed(c)] }).catch(() => {});
+  await ensureDepositMenu(client, c, { bump: true });
   return `✅ **${c.name}** ajouté : salon <#${channel.id}>, onglet « ${c.tab} » dans le Google Sheet.`;
 }
 

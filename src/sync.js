@@ -12,6 +12,7 @@ import { updateStockChannels } from './stockChannels.js';
 import { weeklyRenewal } from './recurrents.js';
 import { weeklyHistory } from './historique.js';
 import { periodicPanelRefresh } from './panel.js';
+import { bumpDepositMenu } from './depositMenu.js';
 
 // ---------- Google Sheet → Discord ----------
 
@@ -61,7 +62,7 @@ async function syncSheetToDiscord(client) {
         c: p.c, qty: p.qty, montant: rachatValue(p.qty, p.bonus), ref: p.ref, week: p.week, weekSum,
         title: '📄 Dépôt ajouté depuis le Google Sheet', color: ui.COLORS.sheet,
       })],
-    }).catch((e) => console.warn(`[sync] envoi impossible dans le salon de ${p.c.name} :`, e.message));
+    }).then(() => bumpDepositMenu(client, p.c)).catch((e) => console.warn(`[sync] envoi impossible dans le salon de ${p.c.name} :`, e.message));
   }
 }
 
@@ -101,7 +102,10 @@ export async function sendPayNotices(client, week) {
       content: `<@${s.c.discordId}> 💰 Ta paie de la semaine est prête : **${ui.money(s.montant)}**.\nViens la chercher ${PAIE.lieu} !`,
       embeds: [ui.recapEmbed(s.c, week, s)],
       allowedMentions: { users: [s.c.discordId] },
-    }).then(() => sent++).catch((e) => console.warn(`[paie] avis impossible pour ${s.c.name} :`, e.message));
+    }).then(() => {
+      sent++;
+      bumpDepositMenu(client, s.c);
+    }).catch((e) => console.warn(`[paie] avis impossible pour ${s.c.name} :`, e.message));
   }
   if (env.recapChannelId) {
     const channel = await client.channels.fetch(env.recapChannelId).catch(() => null);
