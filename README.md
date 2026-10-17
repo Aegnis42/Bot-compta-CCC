@@ -45,6 +45,18 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 
 **Semaines** : du lundi au dimanche, notées `28/09/2026 au 04/10/2026`. Dans les commandes, l'option `semaine` accepte n'importe quel jour de la semaine (`29/09`) ou `derniere`.
 
+## Panneau de gestion
+
+Dans le salon `PANEL_CHANNEL_ID` (par défaut `1560869948589351012`), le bot affiche un panneau (Components V2) avec un résumé en direct (stock, semaine, contrats en cours) et des boutons qui ouvrent des formulaires :
+
+- **📜 Contrats** : nouveau (client, tarif, quantités, prix perso, hebdomadaire), livrer, prix perso, en cours, annuler
+- **🛒 Achats & dépenses** : achat extérieur, contrat nourriture, contrats hebdomadaires (arrêt)
+- **👥 Charbonniers** : ajouter, déclarer un dépôt pour quelqu'un, citoyenneté, liste, retirer
+- **💰 Paie & finances** : salaires (semaine en cours / dernière), historique, envoi des avis de paie
+- **⚙️ Réglages** : catégorie des salons charbonniers, salons de stock, mise à jour du Sheet, actualiser
+
+Réservé au staff (mêmes droits que les commandes). Le bot doit pouvoir voir et écrire dans ce salon. Les commandes slash restent disponibles.
+
 ## Commandes Discord
 
 | Commande | Qui | Rôle |

@@ -1,20 +1,22 @@
 import {
-  SlashCommandBuilder, PermissionFlagsBits, ChannelType, OverwriteType, MessageFlags,
+  SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags,
 } from 'discord.js';
 import { env, PRODUCTS, CODES, TARIFS } from './config.js';
 import { UserError, emptyQty, hasQty } from './utils.js';
 import { normalizeWeek, weekLabel } from './time.js';
-import { rachatValue, contractValue, loadPrices } from './prices.js';
-import { ensureStructure } from './setup.js';
-import { loadSettings, getSetting, setSetting } from './settings.js';
-import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
+import { rachatValue, contractValue } from './prices.js';
+import { scheduleStockRefresh } from './stockChannels.js';
 import { sendPayNotices } from './sync.js';
 import { recordPurchase, recordFood } from './achats.js';
 import { listRecurring, stopRecurring } from './recurrents.js';
 import { lastWeeks } from './historique.js';
 import {
-  allCharbonniers, findByChannel, findByUser, addCharbonnier, deactivateCharbonnier, setCitizenship, validateName,
-  recordDeposit, deleteDeposit, weekSummary, salariesForWeek, loadRegistry, rebuildFormulas,
+  addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow,
+} from './actions.js';
+import { handlePanelInteraction, schedulePanelRefresh } from './panel.js';
+import { isStaff } from './access.js';
+import {
+  findByChannel, findByUser, setCitizenship, recordDeposit, deleteDeposit, weekSummary, salariesForWeek,
 } from './charbonniers.js';
 import {
   listContracts, getContract, getStock, createContract, deliverContract, cancelContract, setContractPrices, isOpen,
@@ -121,14 +123,7 @@ export const commandDefs = [
 
 const EPHEMERAL = new Set(['avis-paie', 'salaires', 'setup', 'charbonnier', 'stock-salons']);
 
-/** Staff : admins du serveur (« Gérer le serveur »), rôle STAFF_ROLE_ID, rôles de adminRoleIds ou compte de adminIds. */
-export const isStaff = (member) =>
-  Boolean(
-    env.adminIds.includes(member?.id ?? member?.user?.id)
-      || env.adminRoleIds.some((r) => member?.roles?.cache?.has(r))
-      || member?.permissions?.has(PermissionFlagsBits.ManageGuild)
-      || (env.staffRoleId && member?.roles?.cache?.has(env.staffRoleId)),
-  );
+export { isStaff };
 
 // Commandes réservées au staff (vérifiées par le bot avant exécution)
 const STAFF_COMMANDS = new Set(['achat', 'nourriture', 'recurrents', 'historique', 'stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
@@ -167,23 +162,6 @@ function weekFrom(i) {
   if (!week) throw new UserError('Semaine invalide. Donne un jour de la semaine, ex : `29/09` ou `29/09/2026`, ou `derniere`.');
   return week;
 }
-
-/** Catégorie des salons charbonniers (réglée par /setup), si elle existe toujours. */
-async function charbonnierCategory(guild) {
-  const id = getSetting(CATEGORY_KEY) ?? env.categoryId;
-  if (!id) return null;
-  const cat = await guild.channels.fetch(id).catch(() => null);
-  return cat?.type === ChannelType.GuildCategory ? cat : null;
-}
-const CATEGORY_KEY = 'categorie_charbonniers';
-
-const staffOverwrites = (guild, botId) => [
-  { id: guild.roles.everyone.id, type: OverwriteType.Role, deny: [PermissionFlagsBits.ViewChannel] },
-  { id: botId, type: OverwriteType.Member, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] },
-  ...(env.staffRoleId ? [{ id: env.staffRoleId, type: OverwriteType.Role, allow: [PermissionFlagsBits.ViewChannel] }] : []),
-];
-
-const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'charbonnier';
 
 // ---------- Handlers ----------
 
@@ -233,16 +211,9 @@ const handlers = {
   },
 
   async 'stock-salons'(i) {
-    const role = i.options.getRole('role');
-    const name = i.options.getString('categorie')?.trim() || 'Stock';
-    const { cat, created } = await setupStockChannels(i.guild, i.client.user.id, name, role).catch((e) => {
-      throw e instanceof UserError ? e : new UserError(`Impossible de créer les salons (permission « Gérer les salons » / « Gérer les rôles » ?) : ${e.message}`);
-    });
-    const lines = [created.length ? `✅ Créé : ${created.join(', ')}.` : `✅ Catégorie **${cat.name}** déjà en place.`];
-    if (role) lines.push(`👁️ Le rôle ${role} peut voir le stock.`);
-    lines.push('Seuls les rôles autorisés (et les admins) voient la catégorie. Pour ajouter un rôle : relance la commande avec `role`, ou modifie les permissions de la catégorie dans Discord.');
-    lines.push('ℹ️ Discord limite les renommages : les chiffres se mettent à jour au plus toutes les 5 minutes.');
-    await i.editReply(lines.join('\n'));
+    await i.editReply(await stockSalonsFlow({
+      guild: i.guild, client: i.client, name: i.options.getString('categorie'), role: i.options.getRole('role'),
+    }));
   },
 
   async 'avis-paie'(i) {
@@ -357,47 +328,12 @@ const handlers = {
   async charbonnier(i) {
     const sub = i.options.getSubcommand();
     if (sub === 'ajouter') {
-      const user = i.options.getUser('membre', true);
-      const member = await i.guild.members.fetch(user.id);
-      // Charbonnier déjà enregistré mais dont le salon n'existe plus ici (supprimé, ou créé sur un autre serveur) :
-      // on le relie à un nouveau salon en gardant son nom, son onglet et son historique.
-      const old = findByUser(user.id);
-      const oldChannel = old?.channelId ? await i.guild.channels.fetch(old.channelId).catch(() => null) : null;
-      if (old && oldChannel) throw new UserError(`<@${user.id}> est déjà enregistré (**${old.name}**, salon <#${oldChannel.id}>).`);
-      if (old) await deactivateCharbonnier(old);
-      const name = (old?.name ?? i.options.getString('nom') ?? member.displayName).trim();
-      try {
-        validateName(name);
-      } catch (e) {
-        throw new UserError(`${e.message}\nPrécise un nom avec l'option \`nom\`.`);
-      }
-      let channel = i.options.getChannel('salon');
-      if (!channel) {
-        const allow = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory];
-        channel = await i.guild.channels.create({
-          name: `charbon-${slug(name)}`,
-          type: ChannelType.GuildText,
-          parent: (await charbonnierCategory(i.guild))?.id,
-          topic: `Dépôts de charbon de ${name}`,
-          permissionOverwrites: [
-            { id: i.guild.roles.everyone.id, type: OverwriteType.Role, deny: [PermissionFlagsBits.ViewChannel] },
-            { id: user.id, type: OverwriteType.Member, allow },
-            { id: i.client.user.id, type: OverwriteType.Member, allow: [...allow, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.AddReactions] },
-            ...(env.staffRoleId ? [{ id: env.staffRoleId, type: OverwriteType.Role, allow }] : []),
-          ],
-        }).catch((e) => {
-          throw new UserError(`Impossible de créer le salon (le bot a-t-il les permissions « Gérer les salons » et « Gérer les rôles » ?) : ${e.message}`);
-        });
-      }
-      const c = await addCharbonnier({ name, discordId: user.id, channelId: channel.id });
-      await channel.send({ content: `<@${user.id}>`, embeds: [ui.welcomeEmbed(c)] }).catch(() => {});
-      await i.editReply(`✅ **${c.name}** ajouté : salon <#${channel.id}>, onglet « ${c.tab} » dans le Google Sheet.`);
+      await i.editReply(await addCharbonnierFlow({
+        guild: i.guild, client: i.client, user: i.options.getUser('membre', true),
+        name: i.options.getString('nom'), channel: i.options.getChannel('salon'),
+      }));
     } else if (sub === 'retirer') {
-      const user = i.options.getUser('membre', true);
-      const c = findByUser(user.id);
-      if (!c) throw new UserError(`<@${user.id}> n'est pas un charbonnier actif.`);
-      await deactivateCharbonnier(c);
-      await i.editReply(`**${c.name}** est désactivé. Son onglet et son salon sont conservés (supprime le salon à la main si besoin).`);
+      await i.editReply(await removeCharbonnierFlow(i.options.getUser('membre', true)));
     } else if (sub === 'citoyennete') {
       const user = i.options.getUser('membre', true);
       const payer = i.options.getBoolean('payer', true);
@@ -408,48 +344,12 @@ const handlers = {
         ? `🏛️ **${c.name}** : la citoyenneté lui est payée les semaines où il fournit du charbon.`
         : `🚫 **${c.name}** : la citoyenneté ne lui est plus payée (il ne compte plus dans le récap).`);
     } else if (sub === 'liste') {
-      const lines = allCharbonniers().map((c) =>
-        `${c.actif ? '🟢' : '⚫'} **${c.name}** — ${c.discordId ? `<@${c.discordId}>` : '?'} · ${c.channelId ? `<#${c.channelId}>` : 'pas de salon'}`
-        + `${c.citoyennete ? '' : ' · 🚫 citoyenneté non payée'}${c.bonus ? ` · bonus +${ui.fmt(c.bonus)}` : ''}`);
-      await i.editReply(lines.join('\n') || 'Aucun charbonnier enregistré.');
+      await i.editReply(charbonniersList());
     }
   },
 
   async setup(i) {
-    const created = await ensureStructure();
-    await loadRegistry();
-    await loadPrices();
-    await rebuildFormulas();
-    await loadSettings();
-    const lines = [created.length ? `✅ Onglets créés dans le Google Sheet : ${created.join(', ')}.` : '✅ Google Sheet déjà en place, formules mises à jour.'];
-
-    const catName = i.options.getString('categorie')?.trim();
-    if (catName) {
-      let cat = i.guild.channels.cache.find((ch) => ch.type === ChannelType.GuildCategory && ch.name.toLowerCase() === catName.toLowerCase());
-      if (cat) {
-        lines.push(`📁 Catégorie existante utilisée : **${cat.name}**.`);
-      } else {
-        cat = await i.guild.channels.create({ name: catName, type: ChannelType.GuildCategory, permissionOverwrites: staffOverwrites(i.guild, i.client.user.id) })
-          .catch((e) => { throw new UserError(`Impossible de créer la catégorie (permission « Gérer les salons » ?) : ${e.message}`); });
-        lines.push(`📁 Catégorie **${cat.name}** créée (privée).`);
-      }
-      await setSetting(CATEGORY_KEY, cat.id);
-
-      // On range les salons des charbonniers déjà enregistrés (leurs permissions individuelles sont conservées)
-      let moved = 0;
-      for (const c of allCharbonniers().filter((x) => x.actif && x.channelId)) {
-        const ch = await i.guild.channels.fetch(c.channelId).catch(() => null);
-        if (ch && ch.parentId !== cat.id) {
-          await ch.setParent(cat.id, { lockPermissions: false }).then(() => moved++).catch(() => {});
-        }
-      }
-      if (moved) lines.push(`↪️ ${moved} salon(s) de charbonnier déplacé(s) dans la catégorie.`);
-    } else {
-      const cat = await charbonnierCategory(i.guild);
-      lines.push(cat ? `📁 Catégorie des charbonniers : **${cat.name}**.` : 'ℹ️ Aucune catégorie réglée : ajoute l\'option `categorie` pour en créer une.');
-    }
-    lines.push('Ajoute ensuite tes charbonniers avec `/charbonnier ajouter`.');
-    await i.editReply(lines.join('\n'));
+    await i.editReply(await setupFlow({ guild: i.guild, client: i.client, categoryName: i.options.getString('categorie') }));
   },
 };
 
@@ -491,6 +391,7 @@ export async function handleInteraction(i) {
     if (STAFF_COMMANDS.has(i.commandName) && !isStaff(i.member)) return i.respond([]).catch(() => {});
     return autocomplete(i).catch(() => i.respond([]).catch(() => {}));
   }
+  if (await handlePanelInteraction(i)) return;
   if (!i.isChatInputCommand()) return;
   const handler = handlers[i.commandName];
   if (!handler) return;
@@ -502,6 +403,7 @@ export async function handleInteraction(i) {
     await i.deferReply(EPHEMERAL.has(i.commandName) ? { flags: MessageFlags.Ephemeral } : {});
     await handler(i);
     if (i.commandName === 'contrat') scheduleStockRefresh();
+    if (STAFF_COMMANDS.has(i.commandName)) schedulePanelRefresh();
   } catch (e) {
     if (!(e instanceof UserError)) console.error(`[/${i.commandName}]`, e);
     const msg = e instanceof UserError ? e.message : `Erreur inattendue : ${e.message}`;

@@ -11,6 +11,7 @@ import { loadSettings, getSetting, setSetting } from './settings.js';
 import { updateStockChannels } from './stockChannels.js';
 import { weeklyRenewal } from './recurrents.js';
 import { weeklyHistory } from './historique.js';
+import { periodicPanelRefresh } from './panel.js';
 
 // ---------- Google Sheet → Discord ----------
 
@@ -134,6 +135,7 @@ export function startSync(client) {
       await payday(client);
       await weeklyRenewal(client);
       await weeklyHistory(client);
+      await periodicPanelRefresh(client);
       await updateStockChannels(client);
     } catch (e) {
       console.error('[sync]', e.message);

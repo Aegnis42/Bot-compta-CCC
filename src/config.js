@@ -16,6 +16,8 @@ export const env = {
   // Rôles Discord autorisés à utiliser toutes les commandes
   adminRoleIds: [...new Set(['1551416821998161990', ...String(process.env.ADMIN_ROLE_IDS ?? '').split(/[\s,;]+/)].filter(Boolean))],
   recapChannelId: process.env.RECAP_CHANNEL_ID || null,
+  // Salon du panneau de gestion
+  panelChannelId: process.env.PANEL_CHANNEL_ID || '1560869948589351012',
   syncInterval: Math.max(15, Number(process.env.SYNC_INTERVAL_SECONDS) || 30),
   tz: process.env.TIMEZONE || 'Europe/Paris',
   currency: 'septimes',
