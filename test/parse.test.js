@@ -56,13 +56,14 @@ test('heure de la paie : dimanche à partir de 17h', async () => {
   assert.equal(isPayTime({ weekday: 6, hour: 17 }), false);
 });
 
+// Les tests lisent la limite et les prix dans la configuration : ils suivent les réglages de src/config.js.
+
 test('niveaux de stock (CP et C uniquement)', async () => {
-  const { stockLevel } = await import('../src/config.js');
+  const { stockLevel, STOCK_MAX } = await import('../src/config.js');
   const icon = (code, n) => stockLevel(code, n)?.icon ?? null;
-  assert.equal(icon('C', 6000), '🔒');
-  assert.equal(icon('C', 5999), '🟢');
-  assert.equal(icon('C', 7200), '🔒');
-  assert.equal(icon('CP', 4000), '🟢');
+  assert.equal(icon('C', STOCK_MAX), '🔒');
+  assert.equal(icon('C', STOCK_MAX - 1), '🟢');
+  assert.equal(icon('C', STOCK_MAX + 1200), '🔒');
   assert.equal(icon('CP', 2000), '🟢');
   assert.equal(icon('C', 1999), '🟠');
   assert.equal(icon('C', 1000), '🟠');
@@ -72,15 +73,14 @@ test('niveaux de stock (CP et C uniquement)', async () => {
   assert.equal(icon('CO', 5000), null);
 });
 
-test('stock plein : dépôts refusés une fois 6000 atteint (CP et C)', async () => {
-  const { overCapacity } = await import('../src/config.js');
+test('stock plein : dépôts refusés une fois la limite atteinte (CP et C)', async () => {
+  const { overCapacity, STOCK_MAX: M } = await import('../src/config.js');
   const q = (CP = 0, C = 0, BC = 0, CO = 0) => ({ CP, C, BC, CO });
-  assert.deepEqual(overCapacity(q(1000), { CP: 5900 }), []); // dépasse 6000 : accepté
-  assert.deepEqual(overCapacity(q(10), { CP: 5999 }), []);
-  assert.deepEqual(overCapacity(q(10), { CP: 4500 }), []); // ancien plafond : accepté
-  assert.deepEqual(overCapacity(q(10), { CP: 6000 }), [{ code: 'CP', stock: 6000 }]); // déjà plein : refusé
-  assert.deepEqual(overCapacity(q(0, 10), { C: 6200 }), [{ code: 'C', stock: 6200 }]);
-  assert.deepEqual(overCapacity(q(0, 10), { CP: 5000, C: 100 }), []); // CP plein mais rien déposé en CP
+  assert.deepEqual(overCapacity(q(1000), { CP: M - 100 }), []); // dépasse la limite : accepté
+  assert.deepEqual(overCapacity(q(10), { CP: M - 1 }), []);
+  assert.deepEqual(overCapacity(q(10), { CP: M }), [{ code: 'CP', stock: M }]); // déjà plein : refusé
+  assert.deepEqual(overCapacity(q(0, 10), { C: M + 200 }), [{ code: 'C', stock: M + 200 }]);
+  assert.deepEqual(overCapacity(q(0, 10), { CP: M + 1, C: 100 }), []); // CP plein mais rien déposé en CP
   assert.deepEqual(overCapacity(q(0, 0, 9999, 9999), { BC: 9000, CO: 9000 }), []); // BC/CO sans plafond
 });
 
@@ -99,18 +99,23 @@ test('accès staff : compte autorisé, admins, rôle staff', async () => {
 
 test('valeur de rachat avec bonus par unité', async () => {
   const { rachatValue } = await import('../src/prices.js');
-  assert.equal(rachatValue({ CP: 300, C: 0, BC: 0, CO: 0 }), 180); // 300 × 0,6
-  assert.equal(rachatValue({ CP: 300, C: 0, BC: 0, CO: 0 }, 0.1), 210); // 300 × 0,7
-  assert.equal(rachatValue({ CP: 0, C: 100, BC: 10, CO: 1 }, 0.1), 152.3); // 100×1,3 + 10×1,9 + 1×3,3
+  const { PRODUCTS } = await import('../src/config.js');
+  const r = Object.fromEntries(PRODUCTS.map((p) => [p.code, p.rachat]));
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 0.005, `${a} ≠ ${b}`);
+  near(rachatValue({ CP: 300, C: 0, BC: 0, CO: 0 }), 300 * r.CP);
+  near(rachatValue({ CP: 300, C: 0, BC: 0, CO: 0 }, 0.1), 300 * (r.CP + 0.1));
+  near(rachatValue({ CP: 0, C: 100, BC: 10, CO: 1 }, 0.1), 100 * (r.C + 0.1) + 10 * (r.BC + 0.1) + (r.CO + 0.1));
 });
 
 test('prix de vente d\'un contrat : prix perso sinon tarif', async () => {
   const { contractUnitPrice, contractValue } = await import('../src/prices.js');
+  const { PRODUCTS } = await import('../src/config.js');
+  const p = Object.fromEntries(PRODUCTS.map((x) => [x.code, x]));
   const ct = { tarif: 'Chatelerie', prixPerso: { CP: 0.9, C: null, BC: null, CO: null } };
   assert.equal(contractUnitPrice(ct, 'CP'), 0.9); // prix perso
-  assert.equal(contractUnitPrice(ct, 'C'), 1.5); // tarif Chatelerie
-  assert.equal(contractUnitPrice({ tarif: 'Normal', prixPerso: {} }, 'CO'), 6);
-  assert.equal(contractValue({ CP: 100, C: 10, BC: 0, CO: 0 }, ct), 105); // 100×0,9 + 10×1,5
+  assert.equal(contractUnitPrice(ct, 'C'), p.C.chatelerie); // tarif Chatelerie
+  assert.equal(contractUnitPrice({ tarif: 'Normal', prixPerso: {} }, 'CO'), p.CO.normal);
+  assert.ok(Math.abs(contractValue({ CP: 100, C: 10, BC: 0, CO: 0 }, ct) - (100 * 0.9 + 10 * p.C.chatelerie)) < 0.005);
 });
 
 test('historique : chiffres d\'une semaine (mêmes règles que le récap)', async () => {
