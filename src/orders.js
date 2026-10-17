@@ -122,7 +122,7 @@ function recapEmbed(o, stock) {
   const lines = PRODUCTS.filter((p) => o.qty[p.code]).map((p) => {
     const unit = contractUnitPrice(ct, p.code);
     let line = `• **${ui.fmt(o.qty[p.code])}** ${p.name} × ${ui.fmt(unit)} = **${ui.money(o.qty[p.code] * unit)}**`;
-    if (stock && o.qty[p.code] > Math.max(0, stock[p.code].stock)) line += '\n  -# ⏳ stock actuel insuffisant : livraison possible en plusieurs fois';
+    if (stock && o.qty[p.code] > Math.max(0, stock[p.code].stock)) line += '\n  _⏳ stock actuel insuffisant : livraison possible en plusieurs fois_';
     return line;
   });
   return new EmbedBuilder()
