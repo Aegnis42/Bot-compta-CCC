@@ -15,18 +15,26 @@ export const qtyLines = (qty) =>
 export const errorEmbed = (msg) =>
   new EmbedBuilder().setColor(COLORS.err).setDescription(/^\p{Extended_Pictographic}/u.test(msg) ? msg : `❌ ${msg}`);
 
-export function depositEmbed({ c, qty, montant, ref, week, weekSum, title, color = COLORS.ok }) {
-  return new EmbedBuilder()
-    .setColor(color)
+/** Salaire de la semaine : « 600 septimes à percevoir (plafond 600) · 🎁 120 en don ». */
+const salaryLine = (sum) => {
+  const capped = Number.isFinite(sum.plafond) ? ` _(plafond ${money(sum.plafond)})_` : '';
+  return `💰 **${money(sum.montant)}** à percevoir${capped}${sum.don ? `\n🎁 **${money(sum.don)}** de don à l'entreprise` : ''}`;
+};
+
+/** `notice` : avertissement de plafond (dépassé / déjà atteint), affiché en évidence. */
+export function depositEmbed({ c, qty, montant, ref, week, weekSum, title, color = COLORS.ok, notice }) {
+  const embed = new EmbedBuilder()
+    .setColor(notice ? COLORS.warn : color)
     .setTitle(title)
-    .setDescription(qtyLines(qty))
+    .setDescription(qtyLines(qty) + (notice ? `\n\n${notice}` : ''))
     .addFields(
       { name: 'Valeur de rachat', value: money(montant), inline: true },
       { name: 'Semaine', value: `du ${week}`, inline: true },
-      { name: 'Total de la semaine', value: `${qtyInline(weekSum.qty)}\n💰 **${money(weekSum.montant)}** à percevoir` },
+      { name: 'Total de la semaine', value: `${qtyInline(weekSum.qty)}\n${salaryLine(weekSum)}` },
     )
     .setFooter({ text: `${c.name}${c.bonus ? ` · bonus rachat +${fmt(c.bonus)}/unité` : ''} · Réf ${ref}` })
     .setTimestamp();
+  return embed;
 }
 
 export function recapEmbed(c, week, sum) {
@@ -36,20 +44,25 @@ export function recapEmbed(c, week, sum) {
     .setDescription(sum.count ? qtyLines(sum.qty) : '_Aucun dépôt cette semaine._')
     .addFields(
       { name: 'Dépôts', value: String(sum.count), inline: true },
-      { name: 'Salaire dû', value: `**${money(sum.montant)}**`, inline: true },
+      { name: 'Salaire dû', value: salaryLine(sum), inline: true },
     );
 }
 
 export function salairesEmbed(week, list) {
   const total = list.reduce((s, x) => s + x.montant, 0);
+  const dons = list.reduce((s, x) => s + (x.don || 0), 0);
   const lines = list
     .sort((a, b) => b.montant - a.montant)
-    .map((s) => `**${s.c.name}**${s.c.discordId ? ` (<@${s.c.discordId}>)` : ''} — ${qtyInline(s.qty)} → **${money(s.montant)}**`);
+    .map((s) => `**${s.c.name}**${s.c.discordId ? ` (<@${s.c.discordId}>)` : ''} — ${qtyInline(s.qty)} → **${money(s.montant)}**`
+      + (s.don ? ` · 🎁 don ${money(s.don)}` : ''));
   return new EmbedBuilder()
     .setColor(COLORS.coal)
     .setTitle(`💰 Salaires — semaine du ${week}`)
-    .setDescription(lines.join('\n') || '_Aucun charbonnier._')
-    .addFields({ name: 'Total à verser', value: `**${money(total)}**` });
+    .setDescription(lines.join('\n').slice(0, 4096) || '_Aucun charbonnier._')
+    .addFields(
+      { name: 'Total à verser', value: `**${money(total)}**`, inline: true },
+      ...(dons ? [{ name: 'Dons à l\'entreprise', value: `🎁 **${money(dons)}**`, inline: true }] : []),
+    );
 }
 
 export function stockEmbed(stock) {

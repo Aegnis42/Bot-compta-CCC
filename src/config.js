@@ -77,6 +77,10 @@ export const BONUS_RACHAT = {
   ids: ['1222839727934279692', '129187703173545984', '422140892212887553', '713178170534133862', '209679108861329408'],
 };
 
+// Plafond de salaire hebdomadaire d'un charbonnier (septimes) : 600 par défaut, jusqu'à 1000 au maximum.
+// Ce qui dépasse est un don à l'entreprise (le charbon entre dans le stock mais n'est pas payé).
+export const PLAFOND = { base: 600, max: 1000 };
+
 export const TARIFS = { normal: 'Normal', chatelerie: 'Chatelerie' };
 
 export const SHEETS = {

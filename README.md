@@ -45,6 +45,10 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 
 **Semaines** : du lundi au dimanche, notées `28/09/2026 au 04/10/2026`. Dans les commandes, l'option `semaine` accepte n'importe quel jour de la semaine (`29/09`) ou `derniere`.
 
+## Plafond de salaire hebdomadaire
+
+Le salaire d'un charbonnier est plafonné à **600 septimes par semaine** (colonne « Plafond hebdo » de l'onglet Charbonniers, jusqu'à **1000**). Au-delà, le charbon entre dans le stock mais compte comme un **don à l'entreprise** : le bot indique ce qui dépasse au dépôt qui franchit le plafond, puis prévient que les dépôts suivants sont des dons. Réglage : panneau → 👥 ⚙️ Réglages, ou `/charbonnier plafond`.
+
 ## Prise de commande (clients)
 
 Dans le salon `ORDER_CHANNEL_ID` (par défaut `1560871503380349030`, #commander), un panneau public affiche les prix et un bouton **🛒 Passer commande**. Le client indique son nom, le lieu de livraison et les quantités, voit le **total** puis confirme : la commande devient un contrat (onglet Contrats, avec le lieu de livraison et son compte Discord) et le staff est prévenu dans le salon de gestion.

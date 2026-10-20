@@ -1,4 +1,4 @@
-import { env, PRODUCTS, SHEETS, STOCK_MAX, BONUS_RACHAT, overCapacity } from './config.js';
+import { env, PRODUCTS, SHEETS, STOCK_MAX, BONUS_RACHAT, PLAFOND, overCapacity } from './config.js';
 import { getStock } from './contrats.js';
 import * as gs from './sheets.js';
 import { COLS, SALAIRES_FIRST_ROW, weekFormula, salairesHeader, recapDynamicWrites } from './setup.js';
@@ -32,7 +32,7 @@ export function validateName(name) {
 
 /** Relit l'onglet "Charbonniers". */
 export async function loadRegistry() {
-  const rows = await gs.read(`${gs.q(SHEETS.CHARBONNIERS)}!A2:H`, { unformatted: true });
+  const rows = await gs.read(`${gs.q(SHEETS.CHARBONNIERS)}!A2:I`, { unformatted: true });
   registry = rows
     .map((r, i) => ({
       name: String(r[0] ?? '').trim(),
@@ -45,6 +45,9 @@ export async function loadRegistry() {
       // Citoyenneté payée quand il fournit du charbon (vide = OUI)
       citoyennete: !/^(non|no|false|0)$/i.test(String(r[7] ?? '').trim()),
       citoyenneteSet: r[7] !== undefined && r[7] !== '',
+      // Plafond de salaire hebdomadaire (vide = PLAFOND.base, jamais plus que PLAFOND.max)
+      plafond: r[8] === undefined || r[8] === '' ? PLAFOND.base : Math.min(Math.max(0, num(r[8])), PLAFOND.max),
+      plafondSet: r[8] !== undefined && r[8] !== '',
       row: i + 2,
     }))
     .filter((c) => c.name);
@@ -86,17 +89,20 @@ export async function rebuildFormulas() {
 
   const rows = list.map((c) => {
     const t = gs.q(c.tab);
+    const brut = `SUMIF(${t}!$B:$B,$B$2,${t}!$G:$G)`;
+    const cap = plafondFormula(c);
     return [
       c.name,
       ...COLS.depot.map((col) => `=SUMIF(${t}!$B:$B,$B$2,${t}!${col}:${col})`),
-      `=SUMIF(${t}!$B:$B,$B$2,${t}!$G:$G)`,
+      `=MIN(${brut},${cap})`, // salaire payé, plafonné
+      `=MAX(0,${brut}-${cap})`, // surplus = don à l'entreprise
       c.actif ? 'Actif' : 'Inactif',
     ];
   });
   const last = first + rows.length - 1;
   const total = rows.length
-    ? ['TOTAL', ...['B', 'C', 'D', 'E', 'F'].map((col) => `=SUM(${col}${first}:${col}${last})`), '']
-    : ['TOTAL', 0, 0, 0, 0, 0, ''];
+    ? ['TOTAL', ...['B', 'C', 'D', 'E', 'F', 'G'].map((col) => `=SUM(${col}${first}:${col}${last})`), '']
+    : ['TOTAL', 0, 0, 0, 0, 0, 0, ''];
 
   // Onglets créés avant la colonne K (bonus) : on ajoute la colonne manquante
   const narrow = list.map((c) => meta.sheets.get(c.tab)).filter((p) => p.gridProperties.columnCount < TAB_COLUMNS);
@@ -112,8 +118,9 @@ export async function rebuildFormulas() {
   ], false);
   await applyDefaultBonus();
 
-  await gs.clear(`${S}!A${first}:G`);
-  await gs.write(`${S}!A${first}:G${first + rows.length}`, [...rows, total], false);
+  await gs.write(`${S}!A4:H4`, [['Charbonnier', ...PRODUCTS.map((p) => p.code), `Salaire dû (${env.currency}, plafonné)`, `Don à l'entreprise (${env.currency})`, 'Statut']]);
+  await gs.clear(`${S}!A${first}:H`);
+  await gs.write(`${S}!A${first}:H${first + rows.length}`, [...rows, total], false);
 
   const stock = COLS.depot.map((col) => [
     list.length ? `=${list.map((c) => `SUM(${gs.q(c.tab)}!${col}2:${col})`).join('+')}` : 0,
@@ -176,15 +183,59 @@ async function ensureTabColumns(title) {
 async function applyDefaultBonus() {
   const R = gs.q(SHEETS.CHARBONNIERS);
   const todo = registry.filter((c) => !c.bonusSet && BONUS_RACHAT.ids.includes(c.discordId));
-  // Colonne H : citoyenneté (OUI par défaut, écrit pour que la colonne soit lisible dans le Sheet)
+  // Colonne H : citoyenneté (OUI par défaut) · colonne I : plafond hebdo (600 par défaut). Écrits pour être lisibles dans le Sheet.
   const citoyens = registry.filter((c) => !c.citoyenneteSet);
+  const plafonds = registry.filter((c) => !c.plafondSet);
   await gs.writeMany([
-    { range: `${R}!G1:H1`, values: [[`Bonus rachat (${env.currency}/unité)`, 'Citoyenneté (OUI/NON)']] },
+    { range: `${R}!G1:I1`, values: [[`Bonus rachat (${env.currency}/unité)`, 'Citoyenneté (OUI/NON)', `Plafond hebdo (${env.currency}, max ${PLAFOND.max})`]] },
     ...todo.map((c) => ({ range: `${R}!G${c.row}`, values: [[BONUS_RACHAT.montant]] })),
     ...citoyens.map((c) => ({ range: `${R}!H${c.row}`, values: [['OUI']] })),
+    ...plafonds.map((c) => ({ range: `${R}!I${c.row}`, values: [[PLAFOND.base]] })),
   ]);
   for (const c of todo) Object.assign(c, { bonus: BONUS_RACHAT.montant, bonusSet: true });
   for (const c of citoyens) Object.assign(c, { citoyennete: true, citoyenneteSet: true });
+  for (const c of plafonds) Object.assign(c, { plafond: PLAFOND.base, plafondSet: true });
+}
+
+/** Formule Sheets du plafond d'un charbonnier (lit la colonne I de l'onglet Charbonniers). */
+export function plafondFormula(c) {
+  const cell = `${gs.q(SHEETS.CHARBONNIERS)}!$I${c.row}`;
+  return `IF(${cell}="",${PLAFOND.base},MIN(${cell},${PLAFOND.max}))`;
+}
+
+/** Fixe le plafond de salaire hebdomadaire d'un charbonnier (entre 0 et PLAFOND.max). */
+export function setPlafond(c, value) {
+  const v = Math.round(Number(value));
+  if (!(v >= 0) || v > PLAFOND.max) throw new UserError(`Plafond invalide : il doit être entre 0 et ${PLAFOND.max} ${env.currency}.`);
+  return gs.withLock(async () => {
+    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!I${c.row}`, [[v]]);
+    await loadRegistry();
+    await rebuildFormulas();
+  });
+}
+
+/**
+ * Applique le plafond à un total de semaine : montant = salaire payé, don = ce qui dépasse,
+ * brut = valeur totale du charbon déposé.
+ */
+export function withPlafond(res, c) {
+  const plafond = c?.plafond ?? Infinity;
+  return { ...res, brut: res.montant, plafond, montant: round2(Math.min(res.montant, plafond)), don: round2(Math.max(0, res.montant - plafond)) };
+}
+
+/**
+ * Message à afficher après un dépôt de valeur `added` si le plafond est dépassé (null sinon).
+ * weekSum : total de la semaine dépôt compris (résultat de weekSummary).
+ */
+export function plafondNotice(weekSum, added) {
+  const { plafond, brut } = weekSum;
+  if (!Number.isFinite(plafond) || brut <= plafond) return null;
+  const before = brut - added;
+  const money = (n) => `${(Math.round(n * 100) / 100).toLocaleString('fr-FR')} ${env.currency}`;
+  if (before >= plafond) {
+    return `🎁 **Plafond hebdomadaire déjà atteint** (${money(plafond)}) : ce dépôt (${money(added)}) est un **don à l'entreprise**, il ne sera pas payé. Merci !`;
+  }
+  return `⚠️ **Plafond hebdomadaire dépassé** : ton salaire de la semaine est plafonné à ${money(plafond)}. **${money(brut - plafond)}** de ce dépôt dépassent et comptent comme un **don à l'entreprise**.`;
 }
 
 /** Payer ou non la citoyenneté à un charbonnier quand il fournit du charbon. */
@@ -263,13 +314,13 @@ export async function readTabs(list) {
 }
 
 export async function weekSummary(c, week) {
-  return summarize(await gs.read(tabRange(c), { unformatted: true }), week);
+  return withPlafond(summarize(await gs.read(tabRange(c), { unformatted: true }), week), c);
 }
 
 /** Salaires de tous les charbonniers pour une semaine. */
 export async function salariesForWeek(week) {
   const tabs = await readTabs(registry);
   return tabs
-    .map(({ c, rows }) => ({ c, ...summarize(rows, week) }))
+    .map(({ c, rows }) => ({ c, ...withPlafond(summarize(rows, week), c) }))
     .filter((s) => s.c.actif || s.count > 0);
 }

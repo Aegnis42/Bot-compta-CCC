@@ -1,6 +1,7 @@
 import { env, PRODUCTS, SHEETS, TARIFS, STOCK_LEVELS } from './config.js';
 import * as gs from './sheets.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
+import { plafondFormula } from './charbonniers.js';
 
 const P = gs.q(SHEETS.PRIX);
 const C = gs.q(SHEETS.CONTRATS);
@@ -117,7 +118,7 @@ const INIT = {
     const S = gs.q(SHEETS.SALAIRES);
     const h = salairesHeader();
     await gs.writeMany(Object.entries(h).map(([cell, values]) => ({ range: `${S}!${cell}`, values })), false);
-    await gs.write(`${S}!A4:G4`, [['Charbonnier', ...PRODUCTS.map((p) => p.code), `Salaire dû (${env.currency})`, 'Statut']]);
+    await gs.write(`${S}!A4:H4`, [['Charbonnier', ...PRODUCTS.map((p) => p.code), `Salaire dû (${env.currency}, plafonné)`, `Don à l'entreprise (${env.currency})`, 'Statut']]);
     return [
       gs.headerFormat(sheetId, 3),
       { repeatCell: { range: { sheetId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 2 }, cell: { userEnteredFormat: { textFormat: { bold: true } } }, fields: 'userEnteredFormat.textFormat' } },
@@ -226,8 +227,10 @@ const RECAP_WEEK = [
  * J14 = nombre de charbonniers ayant fourni du charbon et à qui on paie la citoyenneté.
  */
 export function recapDynamicWrites(list) {
-  const tabs = list.map((c) => gs.q(c.tab));
-  const rachat = tabs.length ? `=${tabs.map((t) => `SUMIFS(${t}!G2:G,${WEEK_RANGE(`${t}!A2:A`)})`).join('+')}` : 0;
+  // Rachat payé = valeur déposée dans la semaine, plafonnée par charbonnier (le surplus est un don)
+  const rachat = list.length
+    ? `=${list.map((c) => `MIN(SUMIFS(${gs.q(c.tab)}!G2:G,${WEEK_RANGE(`${gs.q(c.tab)}!A2:A`)}),${plafondFormula(c)})`).join('+')}`
+    : 0;
   // Citoyenneté : seulement les charbonniers marqués OUI dans l'onglet Charbonniers
   const citoyens = list.filter((c) => c.citoyennete !== false).map((c) => gs.q(c.tab));
   const count = citoyens.length ? `=${citoyens.map((t) => `(COUNTIFS(${WEEK_RANGE(`${t}!A2:A`)},${t}!G2:G,">0")>0)*1`).join('+')}` : 0;

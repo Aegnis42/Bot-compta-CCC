@@ -1,5 +1,5 @@
 import { ChannelType, OverwriteType, PermissionFlagsBits } from 'discord.js';
-import { env } from './config.js';
+import { env, PLAFOND } from './config.js';
 import { UserError } from './utils.js';
 import { ensureStructure } from './setup.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
@@ -8,7 +8,7 @@ import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
 import { rachatValue } from './prices.js';
 import {
   allCharbonniers, findByUser, addCharbonnier, deactivateCharbonnier, validateName, loadRegistry, rebuildFormulas,
-  recordDeposit, weekSummary,
+  recordDeposit, weekSummary, plafondNotice,
 } from './charbonniers.js';
 import * as ui from './ui.js';
 import { ensureDepositMenu } from './depositMenu.js';
@@ -22,7 +22,10 @@ export async function depositAndEmbed(c, qty, note) {
   const res = await recordDeposit(c, qty, { source: 'Discord', note });
   scheduleStockRefresh();
   const weekSum = await weekSummary(c, res.week);
-  return ui.depositEmbed({ c, qty, montant: rachatValue(qty, c.bonus), ref: res.ref, week: res.week, weekSum, title: '✅ Dépôt enregistré' });
+  const montant = rachatValue(qty, c.bonus);
+  return ui.depositEmbed({
+    c, qty, montant, ref: res.ref, week: res.week, weekSum, title: '✅ Dépôt enregistré', notice: plafondNotice(weekSum, montant),
+  });
 }
 
 /** Catégorie des salons charbonniers (réglée par /setup ou le panneau), si elle existe toujours. */
@@ -90,7 +93,8 @@ export async function removeCharbonnierFlow(user) {
 export function charbonniersList() {
   const lines = allCharbonniers().map((c) =>
     `${c.actif ? '🟢' : '⚫'} **${c.name}** — ${c.discordId ? `<@${c.discordId}>` : '?'} · ${c.channelId ? `<#${c.channelId}>` : 'pas de salon'}`
-    + `${c.citoyennete ? '' : ' · 🚫 citoyenneté non payée'}${c.bonus ? ` · bonus +${ui.fmt(c.bonus)}` : ''}`);
+    + `${c.citoyennete ? '' : ' · 🚫 citoyenneté non payée'}${c.bonus ? ` · bonus +${ui.fmt(c.bonus)}` : ''}`
+    + `${c.plafond !== PLAFOND.base ? ` · plafond ${ui.fmt(c.plafond)}` : ''}`);
   return lines.join('\n') || 'Aucun charbonnier enregistré.';
 }
 

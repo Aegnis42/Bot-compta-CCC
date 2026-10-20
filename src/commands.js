@@ -1,7 +1,7 @@
 import {
   SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags,
 } from 'discord.js';
-import { env, PRODUCTS, CODES, TARIFS } from './config.js';
+import { env, PRODUCTS, CODES, TARIFS, PLAFOND } from './config.js';
 import { UserError, emptyQty, hasQty } from './utils.js';
 import { normalizeWeek, weekLabel } from './time.js';
 import { rachatValue, contractValue } from './prices.js';
@@ -15,10 +15,10 @@ import {
 } from './actions.js';
 import { handlePanelInteraction, schedulePanelRefresh } from './panel.js';
 import { isStaff } from './access.js';
-import { handleDepositMenu } from './depositMenu.js';
+import { handleDepositMenu, bumpDepositMenu } from './depositMenu.js';
 import { handleOrderInteraction } from './orders.js';
 import {
-  findByChannel, findByUser, setCitizenship, recordDeposit, deleteDeposit, weekSummary, salariesForWeek,
+  findByChannel, findByUser, setCitizenship, setPlafond, recordDeposit, deleteDeposit, weekSummary, salariesForWeek,
 } from './charbonniers.js';
 import {
   listContracts, getContract, getStock, createContract, deliverContract, cancelContract, setContractPrices, isOpen,
@@ -115,6 +115,9 @@ export const commandDefs = [
     .addSubcommand((s) => s.setName('citoyennete').setDescription('Payer ou non la citoyenneté à un charbonnier quand il fournit du charbon')
       .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord').setRequired(true))
       .addBooleanOption((o) => o.setName('payer').setDescription('True = on lui paie la citoyenneté, False = non').setRequired(true)))
+    .addSubcommand((s) => s.setName('plafond').setDescription(`Plafond de salaire par semaine (${PLAFOND.base} de base, jusqu'à ${PLAFOND.max})`)
+      .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord').setRequired(true))
+      .addIntegerOption((o) => o.setName('montant').setDescription(`Plafond en ${env.currency}`).setRequired(true).setMinValue(0).setMaxValue(PLAFOND.max)))
     .addSubcommand((s) => s.setName('liste').setDescription('Liste des charbonniers')),
 
   new SlashCommandBuilder().setName('setup').setDescription('Initialiser le bot : Google Sheet + catégorie des salons charbonniers')
@@ -328,6 +331,14 @@ const handlers = {
       }));
     } else if (sub === 'retirer') {
       await i.editReply(await removeCharbonnierFlow(i.options.getUser('membre', true)));
+    } else if (sub === 'plafond') {
+      const user = i.options.getUser('membre', true);
+      const c = findByUser(user.id);
+      if (!c) throw new UserError(`<@${user.id}> n'est pas un charbonnier actif.`);
+      const montant = i.options.getInteger('montant', true);
+      await setPlafond(c, montant);
+      bumpDepositMenu(i.client, findByUser(user.id));
+      await i.editReply(`💰 **${c.name}** : salaire plafonné à **${ui.money(montant)}** par semaine (au-delà : don à l'entreprise).`);
     } else if (sub === 'citoyennete') {
       const user = i.options.getUser('membre', true);
       const payer = i.options.getBoolean('payer', true);

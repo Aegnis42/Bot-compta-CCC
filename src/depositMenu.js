@@ -29,6 +29,7 @@ function buildMenu(c) {
       `## ⛏️ Dépôts de ${c.name}`,
       'Tu viens de déposer du charbon ? Clique sur **Déclarer un dépôt** et indique les quantités.',
       `-# Prix de rachat par unité : ${tarifs}${c.bonus ? ` (bonus +${ui.fmt(c.bonus)} compris)` : ''}`,
+      `-# Salaire plafonné à **${ui.money(c.plafond ?? 0)}** par semaine : au-delà, le charbon déposé est un don à l'entreprise.`,
     ].join('\n')))
     .addSeparatorComponents((s) => s.setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addActionRowComponents((row) => row.setComponents(
@@ -38,6 +39,9 @@ function buildMenu(c) {
     ))
     .addTextDisplayComponents((t) => t.setContent('-# Tu peux aussi écrire directement ton dépôt dans ce salon, par exemple `300 CP 50 C`.'));
 }
+
+/** Forme comparable d'un message : sans les `id` que Discord ajoute aux composants, ni les valeurs par défaut. */
+const sameShape = (components) => JSON.stringify(components, (k, v) => (k === 'id' || v === false || v === null ? undefined : v));
 
 /**
  * Place le menu dans le salon du charbonnier. `bump` : le supprime et le reposte tout en bas
@@ -49,9 +53,16 @@ export async function ensureDepositMenu(client, c, { bump = false } = {}) {
   if (!channel?.isTextBased()) return;
   const recent = await channel.messages.fetch({ limit: 30 }).catch(() => null);
   const menus = recent ? [...recent.values()].filter(IS_MENU) : [];
-  if (!bump && menus.length && recent.first()?.id === menus[0].id) return; // déjà tout en bas
+  const menu = buildMenu(c);
+  if (!bump && menus.length && recent.first()?.id === menus[0].id) {
+    // Déjà tout en bas : on le met seulement à jour si son contenu a changé (prix, bonus, plafond…)
+    if (sameShape(menus[0].components.map((x) => x.toJSON())) !== sameShape([menu.toJSON()])) {
+      await menus[0].edit({ components: [menu], flags: MessageFlags.IsComponentsV2 }).catch(() => {});
+    }
+    return;
+  }
   for (const m of menus) await m.delete().catch(() => {});
-  await channel.send({ components: [buildMenu(c)], flags: MessageFlags.IsComponentsV2 }).catch((e) => {
+  await channel.send({ components: [menu], flags: MessageFlags.IsComponentsV2 }).catch((e) => {
     console.warn(`[menu] impossible de poster le menu de ${c.name} :`, e.message);
   });
 }

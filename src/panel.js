@@ -2,27 +2,28 @@ import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, EmbedBuilder, MessageFlags, ModalBuilder,
   SeparatorSpacingSize, StringSelectMenuBuilder, TextInputStyle,
 } from 'discord.js';
-import { env, PRODUCTS, SHEETS, TARIFS, stockLevel } from './config.js';
+import { env, PRODUCTS, SHEETS, TARIFS, PLAFOND, stockLevel } from './config.js';
 import * as gs from './sheets.js';
 import { isStaff } from './access.js';
 import { UserError, hasQty, num } from './utils.js';
 import { parseQuantities, parsePrices } from './parse.js';
 import { getSetting, setSetting } from './settings.js';
 import { previousWeekLabel, weekLabel } from './time.js';
-import { contractValue, rachatValue } from './prices.js';
+import { contractValue } from './prices.js';
 import { scheduleStockRefresh } from './stockChannels.js';
 import {
   listContracts, getStock, createContract, deliverContract, cancelContract, setContractPrices, isOpen,
 } from './contrats.js';
 import {
-  activeCharbonniers, findByUser, setCitizenship, salariesForWeek, recordDeposit, weekSummary,
+  activeCharbonniers, findByUser, setCitizenship, setPlafond, salariesForWeek,
 } from './charbonniers.js';
+import { bumpDepositMenu } from './depositMenu.js';
 import { recordPurchase, recordFood } from './achats.js';
 import { listRecurring, stopRecurring } from './recurrents.js';
 import { lastWeeks } from './historique.js';
 import { sendPayNotices } from './sync.js';
 import {
-  addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow,
+  addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow, depositAndEmbed,
 } from './actions.js';
 import * as ui from './ui.js';
 
@@ -56,7 +57,7 @@ const SECTIONS = [
   ['### 👥 Charbonniers', [
     btn('ch-add', 'Ajouter', '➕', ButtonStyle.Success),
     btn('ch-depot', 'Dépôt pour…', '⛏️', ButtonStyle.Primary),
-    btn('ch-cit', 'Citoyenneté', '🏛️'),
+    btn('ch-cit', 'Réglages', '⚙️'),
     btn('ch-liste', 'Liste', '📋'),
     btn('ch-del', 'Retirer', '➖', ButtonStyle.Danger),
   ]],
@@ -254,9 +255,19 @@ const MODALS = {
     text('qty', 'Quantités déposées', { placeholder: QTY_HINT }),
     text('note', 'Note (optionnel)', { required: false, max: 200 }),
   ),
-  'ch-cit': () => modal('ch-cit', 'Citoyenneté',
+  'ch-cit': () => modal('ch-cit', 'Réglages d\'un charbonnier',
     (l) => l.setLabel('Charbonnier').setUserSelectMenuComponent((s) => s.setCustomId('membre').setRequired(true)),
-    choice('payer', 'Payer la citoyenneté ?', [{ label: 'Oui, quand il fournit du charbon', value: 'oui', emoji: '🏛️' }, { label: 'Non', value: 'non', emoji: '🚫' }]),
+    choice('payer', 'Citoyenneté', [
+      { label: 'Ne pas changer', value: 'keep', default: true },
+      { label: 'Payée quand il fournit du charbon', value: 'oui', emoji: '🏛️' },
+      { label: 'Non payée', value: 'non', emoji: '🚫' },
+    ]),
+    choice('plafond', 'Plafond de salaire par semaine', [
+      { label: 'Ne pas changer', value: 'keep', default: true },
+      ...[600, 700, 800, 900, 1000].filter((v) => v <= PLAFOND.max).map((v) => ({
+        label: `${v} ${env.currency}${v === PLAFOND.base ? ' (de base)' : ''}`, value: String(v), emoji: '💰',
+      })),
+    ]),
   ),
   'ch-del': () => modal('ch-del', 'Retirer un charbonnier',
     (l) => l.setLabel('Charbonnier à désactiver').setUserSelectMenuComponent((s) => s.setCustomId('membre').setRequired(true)),
@@ -377,13 +388,10 @@ const SUBMITS = {
     if (!c) throw new UserError(`<@${user.id}> n'est pas un charbonnier actif.`);
     const qty = qtyFrom(i.fields.getTextInputValue('qty'));
     const note = i.fields.getTextInputValue('note').trim();
-    const res = await recordDeposit(c, qty, { source: 'Discord', note: `${i.user.username} (panneau)${note ? ` : ${note}` : ''}` });
-    scheduleStockRefresh();
-    const embed = ui.depositEmbed({
-      c, qty, montant: rachatValue(qty, c.bonus), ref: res.ref, week: res.week, weekSum: await weekSummary(c, res.week), title: '✅ Dépôt enregistré',
-    });
+    const embed = await depositAndEmbed(c, qty, `${i.user.username} (panneau)${note ? ` : ${note}` : ''}`);
     const ch = c.channelId ? await i.client.channels.fetch(c.channelId).catch(() => null) : null;
     await ch?.send({ content: `Dépôt déclaré par <@${i.user.id}> :`, embeds: [embed] }).catch(() => {});
+    bumpDepositMenu(i.client, c);
     return { embeds: [embed] };
   },
 
@@ -391,9 +399,20 @@ const SUBMITS = {
     const user = firstUser(i, 'membre');
     const c = findByUser(user.id);
     if (!c) throw new UserError(`<@${user.id}> n'est pas un charbonnier actif.`);
-    const payer = selected(i, 'payer') === 'oui';
-    await setCitizenship(c, payer);
-    return { content: payer ? `🏛️ **${c.name}** : citoyenneté payée quand il fournit du charbon.` : `🚫 **${c.name}** : citoyenneté non payée.` };
+    const payer = selected(i, 'payer') === 'keep' ? undefined : selected(i, 'payer');
+    const plafond = selected(i, 'plafond') === 'keep' ? undefined : selected(i, 'plafond');
+    const lines = [];
+    if (payer) {
+      await setCitizenship(c, payer === 'oui');
+      lines.push(payer === 'oui' ? '🏛️ Citoyenneté payée quand il fournit du charbon.' : '🚫 Citoyenneté non payée.');
+    }
+    if (plafond) {
+      await setPlafond(findByUser(user.id), Number(plafond));
+      lines.push(`💰 Plafond de salaire : **${ui.money(Number(plafond))}** par semaine.`);
+    }
+    if (!lines.length) lines.push('Rien n\'a été modifié.');
+    bumpDepositMenu(i.client, findByUser(user.id)); // le menu affiche le plafond
+    return { content: `⚙️ **${c.name}**\n${lines.join('\n')}` };
   },
 
   async 'ch-del'(i) {

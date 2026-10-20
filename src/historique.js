@@ -41,7 +41,8 @@ export function weekFigures(monday, data, params) {
   const sum = (rows, col) => rows.filter(inWeek).reduce((s, r) => s + num(r[col]), 0);
 
   const ca = sum(data.livraisons, 6);
-  const rachat = data.tabs.reduce((s, t) => s + sum(t.rows, 6), 0);
+  // Salaire payé plafonné par charbonnier (le surplus est un don à l'entreprise)
+  const rachat = data.tabs.reduce((s, t) => s + Math.min(sum(t.rows, 6), t.c?.plafond ?? Infinity), 0);
   const achats = sum(data.achats, 6);
   const fournisseurs = data.tabs
     .filter((t) => t.c?.citoyennete !== false) // citoyenneté payée seulement si OUI dans l'onglet Charbonniers

@@ -5,6 +5,7 @@ import { qtyFrom, hasQty, newRef, num } from './utils.js';
 import { loadPrices, rachatValue } from './prices.js';
 import {
   loadRegistry, activeCharbonniers, allCharbonniers, readTabs, weekSummary, salariesForWeek, ensureTab, rebuildFormulas, IDX,
+  plafondNotice,
 } from './charbonniers.js';
 import * as ui from './ui.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
@@ -61,6 +62,7 @@ async function syncSheetToDiscord(client) {
     await channel.send({
       embeds: [ui.depositEmbed({
         c: p.c, qty: p.qty, montant: rachatValue(p.qty, p.bonus), ref: p.ref, week: p.week, weekSum,
+        notice: plafondNotice(weekSum, rachatValue(p.qty, p.bonus)),
         title: '📄 Dépôt ajouté depuis le Google Sheet', color: ui.COLORS.sheet,
       })],
     }).then(() => bumpDepositMenu(client, p.c)).catch((e) => console.warn(`[sync] envoi impossible dans le salon de ${p.c.name} :`, e.message));

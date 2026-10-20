@@ -160,3 +160,16 @@ test('citoyenneté : seuls les charbonniers marqués OUI comptent', async () => 
   assert.equal(f.citoyennete, 50);
   assert.equal(f.rachat, 12); // le rachat reste payé à tous
 });
+
+test('plafond hebdomadaire : salaire plafonné, surplus = don', async () => {
+  const { withPlafond, plafondNotice } = await import('../src/charbonniers.js');
+  const c = { plafond: 600 };
+  const s = (montant) => withPlafond({ montant, count: 1 }, c);
+  assert.deepEqual([s(500).montant, s(500).don], [500, 0]);
+  assert.deepEqual([s(720).montant, s(720).don], [600, 120]);
+  assert.equal(plafondNotice(s(500), 100), null); // sous le plafond
+  assert.equal(plafondNotice(s(600), 100), null); // pile au plafond
+  assert.match(plafondNotice(s(720), 200), /dépassé.*120 septimes/s); // 520 → 720 : 120 dépassent
+  assert.match(plafondNotice(s(800), 100), /déjà atteint.*don à l'entreprise/s); // 700 → 800 : tout le dépôt est un don
+  assert.equal(withPlafond({ montant: 5000 }, { plafond: 1000 }).montant, 1000);
+});
