@@ -73,7 +73,7 @@ export function overCapacity(qty, stock) {
 // Bonus de rachat par défaut (en septimes par unité, sur CP, C, BC et CO) pour certains comptes Discord.
 // Il est recopié dans la colonne « Bonus rachat » de l'onglet Charbonniers, où il peut ensuite être modifié.
 export const BONUS_RACHAT = {
-  montant: 0.1,
+  montant: 0.0,
   ids: ['1222839727934279692', '129187703173545984', '422140892212887553', '713178170534133862', '209679108861329408'],
 };
 
