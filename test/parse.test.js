@@ -173,3 +173,9 @@ test('plafond hebdomadaire : salaire plafonné, surplus = don', async () => {
   assert.match(plafondNotice(s(800), 100), /déjà atteint.*don à l'entreprise/s); // 700 → 800 : tout le dépôt est un don
   assert.equal(withPlafond({ montant: 5000 }, { plafond: 1000 }).montant, 1000);
 });
+
+test('accès staff : comptes admin ajoutés', async () => {
+  const { isStaff } = await import('../src/access.js');
+  const member = (id) => ({ id, permissions: { has: () => false }, roles: { cache: { has: () => false } } });
+  for (const id of ['1548025252146053201', '386606897236672533', '825110608860676177']) assert.equal(isStaff(member(id)), true);
+});

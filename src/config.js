@@ -12,7 +12,7 @@ export const env = {
   categoryId: process.env.CHARBONNIER_CATEGORY_ID || null,
   staffRoleId: process.env.STAFF_ROLE_ID || null,
   // Comptes Discord autorisés à utiliser toutes les commandes, en plus des admins (« Gérer le serveur »)
-  adminIds: [...new Set(['1222839727934279692', ...String(process.env.ADMIN_IDS ?? '').split(/[\s,;]+/)].filter(Boolean))],
+  adminIds: [...new Set(['1222839727934279692', '1548025252146053201', '386606897236672533', '825110608860676177', ...String(process.env.ADMIN_IDS ?? '').split(/[\s,;]+/)].filter(Boolean))],
   // Rôles Discord autorisés à utiliser toutes les commandes
   adminRoleIds: [...new Set(['1551416821998161990', ...String(process.env.ADMIN_ROLE_IDS ?? '').split(/[\s,;]+/)].filter(Boolean))],
   recapChannelId: process.env.RECAP_CHANNEL_ID || null,
