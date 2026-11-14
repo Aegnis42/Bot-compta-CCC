@@ -1,7 +1,8 @@
 import { env, PAIE } from './config.js';
 import * as gs from './sheets.js';
 import { toSheetSerial, weekOfSerial, weekLabel, localClock } from './time.js';
-import { qtyFrom, hasQty, newRef, num } from './utils.js';
+import { hasQty, newRef, num } from './utils.js';
+import { qtyAt } from './columns.js';
 import { loadPrices, rachatValue } from './prices.js';
 import {
   loadRegistry, activeCharbonniers, allCharbonniers, readTabs, weekSummary, salariesForWeek, ensureTab, rebuildFormulas, IDX,
@@ -31,7 +32,7 @@ async function syncSheetToDiscord(client) {
     const writes = [];
     for (const { c, rows } of await readTabs(list)) {
       rows.forEach((r, j) => {
-        const qty = qtyFrom(r, IDX.qty);
+        const qty = qtyAt(r, 'depot');
         if (!hasQty(qty) || String(r[IDX.ref] ?? '').trim()) return;
         const row = j + 2;
         const t = gs.q(c.tab);

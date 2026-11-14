@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseQuantities } from '../src/parse.js';
 import { normalizeWeek } from '../src/time.js';
 
-const q = (CP = 0, C = 0, BC = 0, CO = 0) => ({ CP, C, BC, CO });
+const q = (CP = 0, C = 0, BC = 0, CO = 0, BO = 0) => ({ CP, C, BC, CO, BO });
 
 test('formats courts', () => {
   assert.deepEqual(parseQuantities('300 CP'), q(300));
@@ -76,7 +76,7 @@ test('niveaux de stock (CP et C uniquement)', async () => {
 
 test('stock plein : dépôts refusés une fois la limite atteinte (CP et C)', async () => {
   const { overCapacity, STOCK_MAX: M } = await import('../src/config.js');
-  const q = (CP = 0, C = 0, BC = 0, CO = 0) => ({ CP, C, BC, CO });
+  const q = (CP = 0, C = 0, BC = 0, CO = 0, BO = 0) => ({ CP, C, BC, CO, BO });
   assert.deepEqual(overCapacity(q(1000), { CP: M - 100 }), []); // dépasse la limite : accepté
   assert.deepEqual(overCapacity(q(10), { CP: M - 1 }), []);
   assert.deepEqual(overCapacity(q(10), { CP: M }), [{ code: 'CP', stock: M }]); // déjà plein : refusé
@@ -188,4 +188,24 @@ test('rachat bloquable : seulement la Briquette et le Coke', async () => {
   assert.equal(lockIcon('CP'), ''); // pas de cadenas pour le charbon
   assert.deepEqual(blockedIn({ CP: 10, C: 0, BC: 5, CO: 0 }), []);
   assert.match(blockedMessage(['CO']), /🔒 \*\*Rachat bloqué.*Coke \(CO\)/s);
+});
+
+test('bois : lu dans les messages, au prix de rachat 0,1', async () => {
+  const { parseQuantities } = await import('../src/parse.js');
+  const { rachatValue, contractUnitPrice } = await import('../src/prices.js');
+  assert.deepEqual(parseQuantities('300 CP 200 bois'), q(300, 0, 0, 0, 200));
+  assert.deepEqual(parseQuantities('BO 50'), q(0, 0, 0, 0, 50));
+  assert.equal(parseQuantities('bonjour, boisson'), null);
+  assert.equal(rachatValue(q(0, 0, 0, 0, 1000)), 100);
+  assert.equal(contractUnitPrice({ tarif: 'Chatelerie', prixPerso: {} }, 'BO'), 0.1); // membre de la CCC
+  assert.equal(contractUnitPrice({ tarif: 'Normal', prixPerso: {} }, 'BO'), 0.2); // autres
+});
+
+test('colonnes : le bois après les colonnes existantes, sans rien décaler', async () => {
+  const { COLMAP, colIndex, colLetter, qtyAt } = await import('../src/columns.js');
+  assert.deepEqual([COLMAP.depot.CO, COLMAP.depot.BO, COLMAP.commande.BO, COLMAP.prixPerso.BO], ['F', 'L', 'AE', 'AH']);
+  assert.equal(colIndex('AH'), 33);
+  assert.equal(colLetter(33), 'AH');
+  const row = []; row[2] = 5; row[11] = 40; // C = 5 CP, L = 40 bois
+  assert.deepEqual(qtyAt(row, 'depot'), q(5, 0, 0, 0, 40));
 });

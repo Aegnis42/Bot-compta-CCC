@@ -212,7 +212,7 @@ const contractOptions = () => openContracts.slice(0, 25).map((ct) => ({
 
 const modal = (id, title, ...labels) => new ModalBuilder().setCustomId(`pnm:${id}`).setTitle(title).addLabelComponents(...labels);
 
-const QTY_HINT = 'ex : 500 CP 200 C 10 CO';
+const QTY_HINT = 'ex : 500 CP 200 C 10 CO 300 bois';
 
 function needContracts() {
   if (!openContracts.length) throw new UserError('Aucun contrat en cours. (Si tu viens d\'en créer un, clique sur ♻️ Actualiser.)');

@@ -34,6 +34,8 @@ export const PRODUCTS = [
   { code: 'C', name: 'Charbon', rachat: 1, normal: 1.5, chatelerie: 1.2 },
   { code: 'BC', name: 'Briquette', rachat: 1.8, normal: 3, chatelerie: 2.5 },
   { code: 'CO', name: 'Coke', rachat: 3.2, normal: 6, chatelerie: 5 },
+  // Bois : rachat 0,1 ; vente 0,1 aux membres de la CCC (tarif Chatelerie / Client Crevasse) et 0,2 aux autres
+  { code: 'BO', name: 'Bois', rachat: 0.1, normal: 0.2, chatelerie: 0.1 },
 ];
 export const CODES = PRODUCTS.map((p) => p.code);
 

@@ -2,6 +2,7 @@ import { env, PRODUCTS, SHEETS, TARIFS, STOCK_LEVELS } from './config.js';
 import * as gs from './sheets.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
 import { plafondFormula } from './charbonniers.js';
+import { colsOf, colIndex, colLetter } from './columns.js';
 
 const P = gs.q(SHEETS.PRIX);
 const C = gs.q(SHEETS.CONTRATS);
@@ -10,19 +11,26 @@ const A = gs.q(SHEETS.ACHATS);
 const N = gs.q(SHEETS.NOURRITURE);
 const R = gs.q(SHEETS.RECAP);
 
-// Colonnes des quantités (CP, C, BC, CO) dans chaque onglet
-export const COLS = {
-  depot: ['C', 'D', 'E', 'F'], // onglets charbonniers
-  livraison: ['C', 'D', 'E', 'F'], // Livraisons
-  commande: ['E', 'F', 'G', 'H'], // Contrats
-  livre: ['I', 'J', 'K', 'L'], // Contrats
-  reste: ['M', 'N', 'O', 'P'], // Contrats
-  prixPerso: ['X', 'Y', 'Z', 'AA'], // Contrats : prix de vente personnalisé par unité (vide = tarif)
-  achat: ['C', 'D', 'E', 'F'], // Achats extérieurs
-};
+// Colonnes des quantités de chaque produit dans chaque onglet (dans l'ordre de PRODUCTS) : voir columns.js
+export const COLS = Object.fromEntries(
+  ['depot', 'livraison', 'commande', 'livre', 'reste', 'prixPerso', 'achat'].map((k) => [k, colsOf(k)]),
+);
 
-// Nombre de colonnes de l'onglet Contrats (A → AD)
-const CONTRATS_COLUMNS = 30;
+/** Nombre de colonnes nécessaires : la plus grande parmi les colonnes fixes (`fixedLast`) et celles des produits. */
+const widthOf = (fixedLast, sheets) => Math.max(colIndex(fixedLast), ...sheets.flatMap((k) => colsOf(k).map(colIndex))) + 1;
+
+// Onglet Contrats : colonnes fixes jusqu'à AD, puis les colonnes des produits ajoutés (Bois : AE → AH)
+const CONTRATS_COLUMNS = widthOf('AD', ['commande', 'livre', 'reste', 'prixPerso']);
+const CONTRATS_LAST = colLetter(CONTRATS_COLUMNS - 1);
+const LIVRAISONS_LAST = colLetter(widthOf('I', ['livraison']) - 1);
+const ACHATS_LAST = colLetter(widthOf('J', ['achat']) - 1);
+
+/** Ligne d'en-tête construite colonne par colonne : { A: 'ID', AE: 'BO commandé', … }. */
+const headerRow = (width, cells) => {
+  const row = Array(width).fill('');
+  for (const [letter, value] of Object.entries(cells)) row[colIndex(letter)] = value;
+  return row;
+};
 
 // Ligne de début des données dans "Salaires"
 export const SALAIRES_FIRST_ROW = 5;
@@ -55,33 +63,40 @@ const contractCustom = (i) => `${COLS.prixPerso[i]}2:${COLS.prixPerso[i]}`;
 function contratsHeader() {
   const arr = (title, expr) => `={"${title}";ARRAYFORMULA(IF(A2:A="","",${expr}))}`;
   const cmd = (i) => `${COLS.commande[i]}2:${COLS.commande[i]}`;
-  return [
-    'ID', 'Date', 'Client', `Tarif (${TARIFS.normal}/${TARIFS.chatelerie})`,
-    ...PRODUCTS.map((p) => `${p.code} commandé`),
-    ...PRODUCTS.map((p, i) => arr(`${p.code} livré`, `SUMIF(${L}!B2:B,A2:A,${L}!${COLS.livraison[i]}2:${COLS.livraison[i]})`)),
-    ...PRODUCTS.map((p, i) => arr(`${p.code} reste`, `${cmd(i)}-${COLS.livre[i]}2:${COLS.livre[i]}`)),
-    arr(`Prix client (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${cmd(i)}*${sellPrice(i, 'D2:D', contractCustom(i))}`).join('+')},2)`),
-    arr(`Montant livré (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${COLS.livre[i]}2:${COLS.livre[i]}*${sellPrice(i, 'D2:D', contractCustom(i))}`).join('+')},2)`),
-    arr('Statut', `IF(UPPER(T2:T)="OUI","Annulé",IF(${COLS.reste.map((c) => `(${c}2:${c}<=0)`).join('*')},"Livré",IF(${COLS.livre.map((c) => `${c}2:${c}`).join('+')}>0,"Partiel","En attente")))`),
-    'Annulé (OUI)', 'Note',
+  const cells = { A: 'ID', B: 'Date', C: 'Client', D: `Tarif (${TARIFS.normal}/${TARIFS.chatelerie})` };
+  PRODUCTS.forEach((p, i) => {
+    cells[COLS.commande[i]] = `${p.code} commandé`;
+    cells[COLS.livre[i]] = arr(`${p.code} livré`, `SUMIF(${L}!B2:B,A2:A,${L}!${COLS.livraison[i]}2:${COLS.livraison[i]})`);
+    cells[COLS.reste[i]] = arr(`${p.code} reste`, `${cmd(i)}-${COLS.livre[i]}2:${COLS.livre[i]}`);
+    cells[COLS.prixPerso[i]] = `Prix perso ${p.code} (${env.currency}/unité)`;
+  });
+  Object.assign(cells, {
+    Q: arr(`Prix client (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${cmd(i)}*${sellPrice(i, 'D2:D', contractCustom(i))}`).join('+')},2)`),
+    R: arr(`Montant livré (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => `${COLS.livre[i]}2:${COLS.livre[i]}*${sellPrice(i, 'D2:D', contractCustom(i))}`).join('+')},2)`),
+    S: arr('Statut', `IF(UPPER(T2:T)="OUI","Annulé",IF(${COLS.reste.map((c) => `(${c}2:${c}<=0)`).join('*')},"Livré",IF(${COLS.livre.map((c) => `${c}2:${c}`).join('+')}>0,"Partiel","En attente")))`),
+    T: 'Annulé (OUI)',
+    U: 'Note',
     // Coût matériaux = achats extérieurs rattachés au contrat (prix payé)
     //                 + le reste des quantités commandées au prix de rachat des charbonniers
-    arr(`Coût matériaux (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => {
+    V: arr(`Coût matériaux (${env.currency})`, `ROUND(${PRODUCTS.map((_, i) => {
       const bought = `SUMIF(${A}!H2:H,A2:A,${A}!${COLS.achat[i]}2:${COLS.achat[i]})`;
       return `IF(${cmd(i)}-${bought}>0,${cmd(i)}-${bought},0)*${P}!$C$${i + 2}`;
     }).join('+')}+SUMIF(${A}!H2:H,A2:A,${A}!G2:G),2)`),
-    arr(`Bénéfice (${env.currency})`, 'Q2:Q-V2:V'),
-    ...PRODUCTS.map((p) => `Prix perso ${p.code} (${env.currency}/unité)`),
-    'Hebdomadaire (OUI)',
-    'Lieu de livraison', 'Client Discord (ID)',
-  ];
+    W: arr(`Bénéfice (${env.currency})`, 'Q2:Q-V2:V'),
+    AB: 'Hebdomadaire (OUI)',
+    AC: 'Lieu de livraison',
+    AD: 'Client Discord (ID)',
+  });
+  return headerRow(CONTRATS_COLUMNS, cells);
 }
 
 /** En-tête de l'onglet Livraisons : montant au prix du contrat (prix perso ou tarif). */
 function livraisonsHeader() {
-  const look = (col) => `IFERROR(VLOOKUP(B2:B,${C}!A:AA,${col},FALSE),"")`;
-  const montant = `={"Montant (${env.currency})";ARRAYFORMULA(IF(B2:B="","",IFERROR(ROUND(${PRODUCTS.map((_, i) => `${COLS.livraison[i]}2:${COLS.livraison[i]}*${sellPrice(i, look(4), look(24 + i))}`).join('+')},2),"?")))}`;
-  return ['Date', 'Contrat', ...PRODUCTS.map((p) => p.code), montant, 'Par', 'Note'];
+  const look = (col) => `IFERROR(VLOOKUP(B2:B,${C}!A:${CONTRATS_LAST},${col},FALSE),"")`;
+  const montant = `={"Montant (${env.currency})";ARRAYFORMULA(IF(B2:B="","",IFERROR(ROUND(${PRODUCTS.map((_, i) => `${COLS.livraison[i]}2:${COLS.livraison[i]}*${sellPrice(i, look(4), look(colIndex(COLS.prixPerso[i]) + 1))}`).join('+')},2),"?")))}`;
+  const cells = { A: 'Date', B: 'Contrat', G: montant, H: 'Par', I: 'Note' };
+  PRODUCTS.forEach((p, i) => { cells[COLS.livraison[i]] = p.code; });
+  return headerRow(colIndex(LIVRAISONS_LAST) + 1, cells);
 }
 
 /** Ajoute les colonnes manquantes de l'onglet Contrats (prix perso jusqu'à AA). */
@@ -97,8 +112,17 @@ const NOURRITURE_HEADER = ['Date', `Montant (${env.currency})`, 'Note', 'Par', '
 export const HISTORIQUE_HEADER = [
   'Semaine', 'Lundi', 'Chiffre d\'affaires', 'Rachat charbonniers', 'Achats extérieurs', 'Coût matériaux', 'Bénéfice',
   'Salaire gestion', 'Salaire clan', 'Charbonniers ayant fourni', 'Citoyenneté', 'Contrat nourriture', 'Bénéfice final',
-  'Taxe', 'BAT', ...PRODUCTS.map((p) => `Stock ${p.code} (fin de semaine)`), 'Clôturé le',
+  'Taxe', 'BAT', ...PRODUCTS.slice(0, 4).map((p) => `Stock ${p.code} (fin de semaine)`), 'Clôturé le',
+  ...PRODUCTS.slice(4).map((p) => `Stock ${p.code} (fin de semaine)`),
 ];
+const HISTORIQUE_LAST = colLetter(HISTORIQUE_HEADER.length - 1);
+
+/** En-tête de l'onglet Achats : produits ajoutés après la colonne J (Bois en K). */
+const achatsHeader = () => {
+  const cells = { A: 'Date', B: 'Fournisseur', G: `Prix payé (${env.currency})`, H: 'Contrat (optionnel)', I: 'Par', J: 'Note' };
+  PRODUCTS.forEach((p, i) => { cells[COLS.achat[i]] = p.code; });
+  return headerRow(colIndex(ACHATS_LAST) + 1, cells);
+};
 
 const INIT = {
   async [SHEETS.PRIX](sheetId) {
@@ -134,9 +158,7 @@ const INIT = {
   },
 
   async [SHEETS.ACHATS](sheetId) {
-    await gs.write(`${A}!A1:J1`, [[
-      'Date', 'Fournisseur', ...PRODUCTS.map((p) => p.code), `Prix payé (${env.currency})`, 'Contrat (optionnel)', 'Par', 'Note',
-    ]]);
+    await gs.write(`${A}!A1:${ACHATS_LAST}1`, [achatsHeader()]);
     return [gs.headerFormat(sheetId), gs.columnFormat(sheetId, 0, gs.DATE_TIME)];
   },
 
@@ -146,7 +168,7 @@ const INIT = {
   },
 
   async [SHEETS.HISTORIQUE](sheetId) {
-    await gs.write(`${gs.q(SHEETS.HISTORIQUE)}!A1:T1`, [HISTORIQUE_HEADER]);
+    await gs.write(`${gs.q(SHEETS.HISTORIQUE)}!A1:${HISTORIQUE_LAST}1`, [HISTORIQUE_HEADER]);
     const number = { type: 'NUMBER', pattern: '#,##0.00' };
     return [
       gs.headerFormat(sheetId),
@@ -162,7 +184,7 @@ const INIT = {
 
   async [SHEETS.CONTRATS](sheetId) {
     await ensureContratsColumns();
-    await gs.write(`${C}!A1:AD1`, [contratsHeader()], false);
+    await gs.write(`${C}!A1:${CONTRATS_LAST}1`, [contratsHeader()], false);
     const list = (values, col) => ({
       setDataValidation: {
         range: { sheetId, startRowIndex: 1, startColumnIndex: col, endColumnIndex: col + 1 },
@@ -178,10 +200,22 @@ const INIT = {
   },
 
   async [SHEETS.LIVRAISONS](sheetId) {
-    await gs.write(`${L}!A1:I1`, [livraisonsHeader()], false);
+    await gs.write(`${L}!A1:${LIVRAISONS_LAST}1`, [livraisonsHeader()], false);
     return [gs.headerFormat(sheetId), gs.columnFormat(sheetId, 0, gs.DATE_TIME)];
   },
 };
+
+/** Ajoute dans l'onglet Prix la ligne des produits ajoutés après coup (Bois…), sans toucher aux prix existants. */
+async function ensurePrixRows() {
+  const rows = await gs.read(`${P}!A2:E${PRODUCTS.length + 1}`);
+  const writes = [];
+  PRODUCTS.forEach((p, i) => {
+    const code = String(rows[i]?.[1] ?? '').trim();
+    if (!code) writes.push({ range: `${P}!A${i + 2}:E${i + 2}`, values: [[p.name, p.code, p.rachat, p.normal, p.chatelerie]] });
+    else if (code.toUpperCase() !== p.code) console.warn(`[Prix] ligne ${i + 2} : « ${code} » au lieu de « ${p.code} » (ordre attendu : ${PRODUCTS.map((x) => x.code).join(', ')})`);
+  });
+  await gs.writeMany(writes);
+}
 
 /**
  * Formules automatiques de l'onglet Stock (colonnes E à I). Les colonnes C (reconstruite par le bot)
@@ -190,7 +224,15 @@ const INIT = {
  */
 async function writeStockFormulas() {
   const S = gs.q(SHEETS.STOCK);
+  const n = PRODUCTS.length;
+  const existing = await gs.read(`${S}!A2:D${n + 2}`);
+  const NOTE = 'Colonne D : correction manuelle du stock';
   await gs.writeMany([
+    // Produits ajoutés après coup (Bois…) : nom et code, ajustement manuel initialisé à 0 (jamais écrasé ensuite)
+    ...PRODUCTS.map((p, i) => ({ range: `${S}!A${i + 2}:B${i + 2}`, values: [[p.name, p.code]] })),
+    ...PRODUCTS.map((p, i) => (existing[i]?.[3] === undefined || existing[i]?.[3] === '' ? { range: `${S}!D${i + 2}`, values: [[0]] } : null)).filter(Boolean),
+    // Ancienne note qui occupait la ligne juste sous les produits
+    ...(String(existing[n]?.[0] ?? '').startsWith(NOTE) ? [{ range: `${S}!A${n + 2}`, values: [['']] }] : []),
     { range: `${S}!A1:I1`, values: [['Produit', 'Code', 'Déposé (charbonniers)', 'Ajustement manuel', 'Livré (contrats)', 'Stock actuel', 'Reste à livrer (contrats)', 'À produire', 'Acheté (extérieur)']] },
     ...PRODUCTS.map((p, i) => {
       const r = i + 2;
@@ -354,8 +396,11 @@ export async function ensureStructure() {
 
   // Mises à jour des formules automatiques (ajoutent les nouvelles colonnes aux Sheets existants)
   await ensureContratsColumns();
-  await gs.write(`${C}!A1:AD1`, [contratsHeader()], false);
-  await gs.write(`${L}!A1:I1`, [livraisonsHeader()], false);
+  await ensurePrixRows();
+  await gs.write(`${C}!A1:${CONTRATS_LAST}1`, [contratsHeader()], false);
+  await gs.write(`${L}!A1:${LIVRAISONS_LAST}1`, [livraisonsHeader()], false);
+  await gs.write(`${A}!A1:${ACHATS_LAST}1`, [achatsHeader()]);
+  await gs.write(`${gs.q(SHEETS.HISTORIQUE)}!A1:${HISTORIQUE_LAST}1`, [HISTORIQUE_HEADER]);
   await gs.write(`${N}!A1:F1`, [NOURRITURE_HEADER]);
   await writeStockFormulas();
   await setupRecap();

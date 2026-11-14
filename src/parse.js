@@ -4,10 +4,11 @@ const ALIASES = [
   [/CHARBONS?\s+PAUVRES?/g, ' CP '],
   [/\bBRIQUETTES?\b/g, ' BC '],
   [/\bCO(?:KE|CK|QUE)S?\b/g, ' CO '],
+  [/\bBOIS\b/g, ' BO '],
   [/\bCHARBONS?\b/g, ' C '],
 ];
 
-const TOKEN = /(\d+)|(?<![A-Z])(CP|BC|CO|C)(?![A-Z'’])/g;
+const TOKEN = /(\d+)|(?<![A-Z])(CP|BC|CO|BO|C)(?![A-Z'’])/g;
 
 /**
  * Extrait les quantités d'un message libre.
@@ -46,7 +47,7 @@ function pairUp(tokens, order) {
   return { qty, count };
 }
 
-const PRICE_TOKEN = /(\d+(?:[.,]\d+)?)|(?<![A-Z])(CP|BC|CO|C)(?![A-Z'’])/g;
+const PRICE_TOKEN = /(\d+(?:[.,]\d+)?)|(?<![A-Z])(CP|BC|CO|BO|C)(?![A-Z'’])/g;
 
 /**
  * Prix par produit dans un texte libre : "CP 0,9 C 1.8" ou "0,9 CP". Seuls les produits cités sont renvoyés

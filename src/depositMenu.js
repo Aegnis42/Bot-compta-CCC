@@ -83,17 +83,22 @@ export async function ensureAllDepositMenus(client) {
   for (const c of activeCharbonniers()) await ensureDepositMenu(client, c);
 }
 
+// Discord limite un formulaire à 5 champs : une case par produit, puis la note s'il reste de la place
+const MODAL_MAX = 5;
+
 function depositModal(c) {
   const modal = new ModalBuilder().setCustomId('dmm:depot').setTitle(`Dépôt de ${c.name}`.slice(0, 45));
   for (const p of PRODUCTS) {
     modal.addLabelComponents((l) => l
       .setLabel(`${p.name} (${p.code})`)
-      .setDescription('Nombre déposé (laisse vide si aucun)')
+      .setDescription(isBlocked(p.code) ? '🔒 Rachat bloqué pour le moment' : 'Nombre déposé (laisse vide si aucun)')
       .setTextInputComponent((t) => t.setCustomId(p.code).setStyle(TextInputStyle.Short).setRequired(false).setPlaceholder('0').setMaxLength(7)));
   }
-  modal.addLabelComponents((l) => l
-    .setLabel('Note (optionnel)')
-    .setTextInputComponent((t) => t.setCustomId('note').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(200)));
+  if (PRODUCTS.length < MODAL_MAX) {
+    modal.addLabelComponents((l) => l
+      .setLabel('Note (optionnel)')
+      .setTextInputComponent((t) => t.setCustomId('note').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(200)));
+  }
   return modal;
 }
 
@@ -124,7 +129,7 @@ export async function handleDepositMenu(i) {
       await i.showModal(depositModal(c));
     } else if (i.isModalSubmit() && id === 'dmm:depot') {
       const qty = readModalQty((code) => i.fields.getTextInputValue(code));
-      const note = i.fields.getTextInputValue('note').trim();
+      const note = PRODUCTS.length < MODAL_MAX ? i.fields.getTextInputValue('note').trim() : '';
       await i.deferReply(); // réponse visible dans le salon, comme un dépôt écrit
       const by = i.user.id === c.discordId ? i.user.username : `${i.user.username} (pour ${c.name})`;
       const embed = await depositAndEmbed(c, qty, `${by} (menu)${note ? ` : ${note}` : ''}`);

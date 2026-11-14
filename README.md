@@ -17,6 +17,7 @@ Bot Discord qui tient la comptabilité des charbonniers dans un Google Sheet :
 | Charbon | C | 1,2 | 2 | 1,5 |
 | Briquette | BC | 1,8 | 3 | 2,5 |
 | Coke | CO | 3,2 | 6 | 5 |
+| Bois | BO | 0,1 | 0,2 | 0,1 |
 
 Montants en **septimes**. Les prix sont dans l'onglet `Prix` du Sheet : on peut les modifier là, tout se recalcule.
 Exemple : 300 CP × 0,6 = **180 septimes**.

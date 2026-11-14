@@ -3,6 +3,7 @@ import * as gs from './sheets.js';
 import { getContract } from './contrats.js';
 import { toSheetSerial } from './time.js';
 import { UserError, lastDataRow, num } from './utils.js';
+import { qtyWrites } from './columns.js';
 
 const A = gs.q(SHEETS.ACHATS);
 const N = gs.q(SHEETS.NOURRITURE);
@@ -23,9 +24,11 @@ export function recordPurchase({ fournisseur, qty, prix, contrat, par, note = ''
     const rows = await gs.read(`${A}!A2:B`);
     const row = lastDataRow(rows, [0, 1]) + 3;
     await gs.ensureRows(SHEETS.ACHATS, row);
-    await gs.write(`${A}!A${row}:J${row}`, [[
-      toSheetSerial(), fournisseur, ...CODES.map((c) => qty[c] || ''), prix, ct?.id ?? '', par, note,
-    ]]);
+    await gs.writeMany([
+      { range: `${A}!A${row}:B${row}`, values: [[toSheetSerial(), fournisseur]] },
+      ...qtyWrites(A, 'achat', row, qty),
+      { range: `${A}!G${row}:J${row}`, values: [[prix, ct?.id ?? '', par, note]] },
+    ]);
     return { row, contract: ct };
   });
 }

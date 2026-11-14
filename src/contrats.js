@@ -1,7 +1,11 @@
 import { CODES, PRODUCTS, SHEETS } from './config.js';
 import * as gs from './sheets.js';
 import { toSheetSerial } from './time.js';
-import { UserError, num, qtyFrom, emptyQty, hasQty, lastDataRow } from './utils.js';
+import { UserError, num, emptyQty, hasQty, lastDataRow } from './utils.js';
+import { COLMAP, colIndex, colLetter, qtyAt, qtyWrites } from './columns.js';
+
+// Dernière colonne de l'onglet Contrats : AD, ou plus loin pour les produits ajoutés (Bois : AE → AH)
+const LAST = colLetter(Math.max(colIndex('AD'), ...['commande', 'livre', 'reste', 'prixPerso'].flatMap((k) => Object.values(COLMAP[k]).map(colIndex))));
 
 const C = gs.q(SHEETS.CONTRATS);
 const L = gs.q(SHEETS.LIVRAISONS);
@@ -17,9 +21,9 @@ function toContract(r, i) {
     date: r[1],
     client: String(r[2] ?? ''),
     tarif: String(r[3] ?? ''),
-    cmd: qtyFrom(r, 4),
-    livre: qtyFrom(r, 8),
-    reste: qtyFrom(r, 12),
+    cmd: qtyAt(r, 'commande'),
+    livre: qtyAt(r, 'livre'),
+    reste: qtyAt(r, 'reste'),
     montant: num(r[16]),
     montantLivre: num(r[17]),
     statut: String(r[18] ?? ''),
@@ -27,7 +31,10 @@ function toContract(r, i) {
     cout: num(r[21]),
     benefice: num(r[22]),
     // Prix de vente personnalisé par unité, null si le tarif s'applique
-    prixPerso: Object.fromEntries(CODES.map((c, k) => [c, num(r[23 + k]) > 0 ? num(r[23 + k]) : null])),
+    prixPerso: Object.fromEntries(CODES.map((c) => {
+      const v = num(r[colIndex(COLMAP.prixPerso[c])]);
+      return [c, v > 0 ? v : null];
+    })),
     hebdo: /^oui$/i.test(String(r[27] ?? '').trim()),
     hebdoInfo: String(r[27] ?? ''),
     lieu: String(r[28] ?? ''),
@@ -38,7 +45,7 @@ function toContract(r, i) {
 export const isOpen = (ct) => ct.statut !== 'Livré' && ct.statut !== 'Annulé';
 
 export async function listContracts() {
-  const rows = await gs.read(`${C}!A2:AD`, { unformatted: true });
+  const rows = await gs.read(`${C}!A2:${LAST}`, { unformatted: true });
   return rows.map(toContract).filter((ct) => ct.id);
 }
 
@@ -68,9 +75,11 @@ export function createContract({ client, tarif, qty, prices = {}, note = '', heb
     const row = lastDataRow(rows, [0]) + 3;
     await gs.ensureRows(SHEETS.CONTRATS, row);
     await gs.writeMany([
-      { range: `${C}!A${row}:H${row}`, values: [[id, toSheetSerial(), client, tarif, ...CODES.map((c) => qty[c] || '')]] },
+      { range: `${C}!A${row}:D${row}`, values: [[id, toSheetSerial(), client, tarif]] },
+      ...qtyWrites(C, 'commande', row, qty),
       { range: `${C}!U${row}`, values: [[note]] },
-      { range: `${C}!X${row}:AD${row}`, values: [[...CODES.map((c) => prices[c] || ''), hebdo ? 'OUI' : '', lieu, clientId]] },
+      ...qtyWrites(C, 'prixPerso', row, prices),
+      { range: `${C}!AB${row}:AD${row}`, values: [[hebdo ? 'OUI' : '', lieu, clientId]] },
     ]);
     return getContract(id);
   });
@@ -116,7 +125,8 @@ export function deliverContract(id, requested, author) {
     const row = lastDataRow(rows, [0, 1]) + 3;
     await gs.ensureRows(SHEETS.LIVRAISONS, row);
     await gs.writeMany([
-      { range: `${L}!A${row}:F${row}`, values: [[toSheetSerial(), ct.id, ...CODES.map((c) => delivered[c] || '')]] },
+      { range: `${L}!A${row}:B${row}`, values: [[toSheetSerial(), ct.id]] },
+      ...qtyWrites(L, 'livraison', row, delivered),
       { range: `${L}!H${row}`, values: [[author]] },
     ]);
     return { contract: await getContract(ct.id), delivered, stock: await getStock() };

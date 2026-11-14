@@ -22,7 +22,7 @@ export async function loadPrices() {
 export const getPrices = () => prices;
 
 /** Valeur de rachat ; `bonus` = septimes ajoutés par unité (bonus du charbonnier). */
-export const rachatValue = (qty, bonus = 0) => round2(CODES.reduce((s, c) => s + qty[c] * (prices[c].rachat + bonus), 0));
+export const rachatValue = (qty, bonus = 0) => round2(CODES.reduce((s, c) => s + (qty[c] || 0) * (prices[c].rachat + bonus), 0));
 
 export const isChatelerie = (tarif) => /chat/i.test(String(tarif ?? ''));
 
@@ -31,7 +31,7 @@ export const contractUnitPrice = (ct, code) =>
   ct.prixPerso?.[code] ?? (isChatelerie(ct.tarif) ? prices[code].chatelerie : prices[code].normal);
 
 /** Valeur de vente de quantités au prix d'un contrat. */
-export const contractValue = (qty, ct) => round2(CODES.reduce((s, c) => s + qty[c] * contractUnitPrice(ct, c), 0));
+export const contractValue = (qty, ct) => round2(CODES.reduce((s, c) => s + (qty[c] || 0) * contractUnitPrice(ct, c), 0));
 
 export const venteValue = (qty, tarif) =>
-  round2(CODES.reduce((s, c) => s + qty[c] * (isChatelerie(tarif) ? prices[c].chatelerie : prices[c].normal), 0));
+  round2(CODES.reduce((s, c) => s + (qty[c] || 0) * (isChatelerie(tarif) ? prices[c].chatelerie : prices[c].normal), 0));

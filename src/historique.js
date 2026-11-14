@@ -4,6 +4,7 @@ import { getStock } from './contrats.js';
 import { allCharbonniers, readTabs } from './charbonniers.js';
 import { toSheetSerial, weekOfSerial } from './time.js';
 import { num, round2, lastDataRow } from './utils.js';
+import { colLetter } from './columns.js';
 import * as ui from './ui.js';
 
 // Historique : une ligne par semaine terminée (lundi → dimanche), avec les chiffres du récap de la Feuille 1
@@ -93,13 +94,15 @@ export function closeFinishedWeeks() {
       return [
         weekOfSerial(m), m, f.ca, f.rachat, f.achats, f.cout, f.benefice, f.gestion, f.clan, f.fournisseurs,
         f.citoyennete, f.nourriture, f.final, f.taxe, f.bat,
-        ...CODES.map((c) => (m === lastFinished ? round2(stock[c].stock) : '')),
+        // Stocks des 4 produits d'origine (P → S), date de clôture (T), puis produits ajoutés (Bois en U)
+        ...CODES.slice(0, 4).map((c) => (m === lastFinished ? round2(stock[c].stock) : '')),
         toSheetSerial(),
+        ...CODES.slice(4).map((c) => (m === lastFinished ? round2(stock[c].stock) : '')),
       ];
     });
     const firstRow = lastDataRow(existingRows, [0]) + 3;
     await gs.ensureRows(SHEETS.HISTORIQUE, firstRow + rows.length);
-    await gs.write(`${H}!A${firstRow}:T${firstRow + rows.length - 1}`, rows);
+    await gs.write(`${H}!A${firstRow}:${colLetter(rows[0].length - 1)}${firstRow + rows.length - 1}`, rows);
     return rows.map((r) => ({ semaine: r[0], ca: r[2], benefice: r[6], final: r[12], bat: r[14] }));
   });
 }

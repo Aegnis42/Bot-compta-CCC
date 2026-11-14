@@ -90,7 +90,7 @@ function orderModal(member, tarif) {
         .setCustomId('lieu').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(150).setPlaceholder('ex : Markarth, entrepôt du port')),
       qtyInput('CP', 'Charbon Pauvre (quantité)', 'ex : 500'),
       qtyInput('C', 'Charbon (quantité)', 'ex : 200'),
-      qtyInput('autres', 'Briquette / Coke (optionnel)', 'ex : 20 BC 5 CO'),
+      qtyInput('autres', 'Briquette / Coke / Bois (optionnel)', 'ex : 20 BC 5 CO 300 bois'),
     );
 }
 
@@ -106,7 +106,7 @@ export function readOrderQty(get) {
   const autres = String(get('autres') ?? '').trim();
   if (autres) {
     const extra = parseQuantities(autres);
-    if (!extra) throw new UserError(`Briquette / Coke : « ${autres} » non reconnu. Écris par exemple 20 BC 5 CO.`);
+    if (!extra) throw new UserError(`Briquette / Coke / Bois : « ${autres} » non reconnu. Écris par exemple 20 BC 5 CO 300 bois.`);
     addQty(qty, extra);
   }
   if (!hasQty(qty)) throw new UserError('Indique au moins une quantité à commander.');
