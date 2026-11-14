@@ -77,10 +77,12 @@ async function syncRegistry() {
   const signature = allCharbonniers().map((c) => `${c.name}|${c.tab}|${c.actif}|${c.citoyennete}`).join(';');
   if (signature === lastSignature) return;
   await gs.withLock(async () => {
+    // Liste relue sous le verrou : un charbonnier supprimé entre-temps ne doit pas voir son onglet recréé
+    await loadRegistry();
     for (const c of allCharbonniers()) await ensureTab(c.tab);
     await rebuildFormulas();
   });
-  lastSignature = signature;
+  lastSignature = allCharbonniers().map((c) => `${c.name}|${c.tab}|${c.actif}|${c.citoyennete}`).join(';');
 }
 
 // ---------- Avis de paie (dimanche 17h) ----------
