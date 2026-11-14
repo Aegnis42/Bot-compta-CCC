@@ -12,13 +12,14 @@ import { listRecurring, stopRecurring } from './recurrents.js';
 import { lastWeeks } from './historique.js';
 import {
   addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow, depositAndEmbed,
+  resolveForDeletion,
 } from './actions.js';
-import { handlePanelInteraction, schedulePanelRefresh } from './panel.js';
+import { handlePanelInteraction, schedulePanelRefresh, deletionPrompt } from './panel.js';
 import { isStaff } from './access.js';
 import { handleDepositMenu, bumpDepositMenu } from './depositMenu.js';
 import { handleOrderInteraction } from './orders.js';
 import {
-  findByChannel, findByUser, setCitizenship, setPlafond, recordDeposit, deleteDeposit, weekSummary, salariesForWeek,
+  allCharbonniers, findByChannel, findByUser, setCitizenship, setPlafond, recordDeposit, deleteDeposit, weekSummary, salariesForWeek,
 } from './charbonniers.js';
 import {
   listContracts, getContract, getStock, createContract, deliverContract, cancelContract, setContractPrices, isOpen,
@@ -112,6 +113,9 @@ export const commandDefs = [
       .addChannelOption((o) => o.setName('salon').setDescription('Utiliser un salon existant au lieu d\'en créer un').addChannelTypes(ChannelType.GuildText)))
     .addSubcommand((s) => s.setName('retirer').setDescription('Désactiver un charbonnier (son onglet et son historique sont conservés)')
       .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord').setRequired(true)))
+    .addSubcommand((s) => s.setName('supprimer').setDescription('Supprimer définitivement un charbonnier (salon, onglet du Sheet, ligne) — avec confirmation')
+      .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord'))
+      .addStringOption((o) => o.setName('nom').setDescription('Ou son nom (s’il n’est plus sur Discord)').setAutocomplete(true)))
     .addSubcommand((s) => s.setName('citoyennete').setDescription('Payer ou non la citoyenneté à un charbonnier quand il fournit du charbon')
       .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord').setRequired(true))
       .addBooleanOption((o) => o.setName('payer').setDescription('True = on lui paie la citoyenneté, False = non').setRequired(true)))
@@ -331,6 +335,11 @@ const handlers = {
       }));
     } else if (sub === 'retirer') {
       await i.editReply(await removeCharbonnierFlow(i.options.getUser('membre', true)));
+    } else if (sub === 'supprimer') {
+      const user = i.options.getUser('membre');
+      const name = i.options.getString('nom');
+      if (!user && !name) throw new UserError('Indique un `membre` ou un `nom`.');
+      await i.editReply(await deletionPrompt(i.guild, resolveForDeletion({ user, name })));
     } else if (sub === 'plafond') {
       const user = i.options.getUser('membre', true);
       const c = findByUser(user.id);
@@ -362,6 +371,14 @@ const handlers = {
 
 let contractCache = { at: 0, list: [] };
 async function autocomplete(i) {
+  if (i.commandName === 'charbonnier') {
+    const typed = String(i.options.getFocused() ?? '').toLowerCase();
+    await i.respond(allCharbonniers()
+      .filter((c) => c.name.toLowerCase().includes(typed))
+      .slice(0, 25)
+      .map((c) => ({ name: `${c.name}${c.actif ? '' : ' (inactif)'}`.slice(0, 100), value: c.name })));
+    return;
+  }
   if (i.commandName === 'recurrents') {
     const typed = String(i.options.getFocused() ?? '').toLowerCase();
     const { contracts, food } = await listRecurring();

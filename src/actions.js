@@ -1,5 +1,5 @@
 import { ChannelType, OverwriteType, PermissionFlagsBits } from 'discord.js';
-import { env, PLAFOND } from './config.js';
+import { env, PLAFOND, PRODUCTS } from './config.js';
 import { UserError } from './utils.js';
 import { ensureStructure } from './setup.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
@@ -8,8 +8,9 @@ import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
 import { rachatValue } from './prices.js';
 import {
   allCharbonniers, findByUser, addCharbonnier, deactivateCharbonnier, validateName, loadRegistry, rebuildFormulas,
-  recordDeposit, weekSummary, plafondNotice,
+  recordDeposit, weekSummary, plafondNotice, findAny, tabTotals, deleteCharbonnier,
 } from './charbonniers.js';
+import { weekLabel } from './time.js';
 import * as ui from './ui.js';
 import { ensureDepositMenu } from './depositMenu.js';
 
@@ -88,6 +89,51 @@ export async function removeCharbonnierFlow(user) {
   if (!c) throw new UserError(`<@${user.id}> n'est pas un charbonnier actif.`);
   await deactivateCharbonnier(c);
   return `**${c.name}** est désactivé. Son onglet et son salon sont conservés (supprime le salon à la main si besoin).`;
+}
+
+/** Charbonnier à supprimer, par membre Discord ou par nom (actifs et inactifs). */
+export function resolveForDeletion({ user, name }) {
+  const c = findAny({ userId: user?.id, name: name?.trim() });
+  if (!c) throw new UserError(user ? `<@${user.id}> n'est pas enregistré comme charbonnier.` : `Aucun charbonnier nommé « ${name} ».`);
+  return c;
+}
+
+/** Récapitulatif affiché avant la suppression, avec ce qui sera supprimé et ce qui est conservé. */
+export async function deletionPreview(guild, c) {
+  const [totals, week] = await Promise.all([tabTotals(c), weekSummary(c, weekLabel()).catch(() => null)]);
+  const channel = c.channelId ? await guild.channels.fetch(c.channelId).catch(() => null) : null;
+  const lines = [
+    `🗑️ **Supprimer définitivement ${c.name} ?**${c.discordId ? ` (<@${c.discordId}>)` : ''}`,
+    '',
+    'Seront supprimés :',
+    `• le salon Discord ${channel ? `<#${channel.id}>` : '_(déjà supprimé)_'}`,
+    `• son onglet « ${c.tab} » dans le Google Sheet (${totals.count} dépôt(s))`,
+    '• sa ligne dans l\'onglet Charbonniers',
+    '',
+    `📦 Le charbon qu'il a déposé (${ui.qtyInline(totals.qty)}) **reste dans le stock** : il est reporté en « Ajustement manuel ».`,
+    '🗂️ Les semaines déjà clôturées dans l\'Historique ne changent pas.',
+  ];
+  if (week?.montant > 0) {
+    lines.push('', `⚠️ Il a **${ui.money(week.montant)}** de salaire cette semaine : ils ne seront plus comptés dans les salaires ni dans l'avis de paie de dimanche. Pense à le payer à la main.`);
+  }
+  lines.push('', '**Cette action est irréversible.** Pour seulement l\'écarter en gardant tout, utilise plutôt « Retirer ».');
+  return lines.join('\n');
+}
+
+/** Supprime le charbonnier : Sheet (onglet + ligne, dépôts reportés dans le stock) puis salon Discord. */
+export async function deleteCharbonnierFlow({ guild, c }) {
+  const totals = await deleteCharbonnier(c);
+  let channelNote = '';
+  const channel = c.channelId ? await guild.channels.fetch(c.channelId).catch(() => null) : null;
+  if (channel) {
+    await channel.delete(`Charbonnier ${c.name} supprimé`).then(() => {
+      channelNote = ' Son salon a été supprimé.';
+    }).catch((e) => {
+      channelNote = ` ⚠️ Le salon n'a pas pu être supprimé (${e.message}) : supprime-le à la main.`;
+    });
+  }
+  const moved = PRODUCTS.some((p) => totals.qty[p.code]) ? ` Son charbon (${ui.qtyInline(totals.qty)}) reste dans le stock (ajustement manuel).` : '';
+  return `🗑️ **${c.name}** a été supprimé du Google Sheet.${channelNote}${moved}`;
 }
 
 export function charbonniersList() {

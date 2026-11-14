@@ -165,6 +165,55 @@ export function deactivateCharbonnier(c) {
   });
 }
 
+/** Charbonnier (actif ou non) par compte Discord ou par nom. */
+export const findAny = ({ userId, name }) =>
+  (userId && registry.find((c) => c.discordId === userId)) || (name && findByName(name)) || null;
+
+/** Ce que contient l'onglet d'un charbonnier : nombre de dépôts et quantités totales déposées. */
+export async function tabTotals(c) {
+  const meta = await gs.getMeta();
+  if (!meta.sheets.has(c.tab)) return { count: 0, qty: emptyQty() };
+  const rows = await gs.read(tabRange(c), { unformatted: true });
+  const qty = emptyQty();
+  let count = 0;
+  for (const r of rows) {
+    const q = qtyFrom(r, IDX.qty);
+    if (!PRODUCTS.some((p) => q[p.code])) continue;
+    addQty(qty, q);
+    count++;
+  }
+  return { count, qty };
+}
+
+/**
+ * Supprime définitivement un charbonnier du Sheet : son onglet et sa ligne dans « Charbonniers ».
+ * Le charbon qu'il a déposé reste dans le stock : il est reporté dans la colonne « Ajustement manuel » (D)
+ * de l'onglet Stock, sinon il disparaîtrait avec l'onglet.
+ */
+export function deleteCharbonnier(c) {
+  return gs.withLock(async () => {
+    const totals = await tabTotals(c);
+    const St = gs.q(SHEETS.STOCK);
+    if (PRODUCTS.some((p) => totals.qty[p.code])) {
+      const ajust = await gs.read(`${St}!D2:D${PRODUCTS.length + 1}`, { unformatted: true });
+      await gs.write(`${St}!D2:D${PRODUCTS.length + 1}`, PRODUCTS.map((p, i) => [num(ajust[i]?.[0]) + totals.qty[p.code]]));
+    }
+    const meta = await gs.getMeta(true);
+    const requests = [];
+    // Onglet supprimé seulement s'il n'est partagé avec aucun autre charbonnier
+    if (meta.sheets.has(c.tab) && !registry.some((x) => x !== c && x.tab === c.tab)) {
+      requests.push({ deleteSheet: { sheetId: meta.sheets.get(c.tab).sheetId } });
+    }
+    const reg = meta.sheets.get(SHEETS.CHARBONNIERS);
+    requests.push({ deleteDimension: { range: { sheetId: reg.sheetId, dimension: 'ROWS', startIndex: c.row - 1, endIndex: c.row } } });
+    await gs.batchUpdate(requests);
+    await gs.getMeta(true);
+    await loadRegistry();
+    await rebuildFormulas();
+    return totals;
+  });
+}
+
 const tabRange = (c) => `${gs.q(c.tab)}!A2:K`;
 
 /** Ajoute la colonne K (bonus) à un onglet créé avant son apparition. */

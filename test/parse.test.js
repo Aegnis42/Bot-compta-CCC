@@ -59,15 +59,16 @@ test('heure de la paie : dimanche à partir de 17h', async () => {
 // Les tests lisent la limite et les prix dans la configuration : ils suivent les réglages de src/config.js.
 
 test('niveaux de stock (CP et C uniquement)', async () => {
-  const { stockLevel, STOCK_MAX } = await import('../src/config.js');
+  const { stockLevel, STOCK_MAX, STOCK_LEVELS } = await import('../src/config.js');
+  const [, vert, orange] = STOCK_LEVELS.levels.map((l) => l.min);
   const icon = (code, n) => stockLevel(code, n)?.icon ?? null;
   assert.equal(icon('C', STOCK_MAX), '🔒');
   assert.equal(icon('C', STOCK_MAX - 1), '🟢');
   assert.equal(icon('C', STOCK_MAX + 1200), '🔒');
-  assert.equal(icon('CP', 2000), '🟢');
-  assert.equal(icon('C', 1999), '🟠');
-  assert.equal(icon('C', 1000), '🟠');
-  assert.equal(icon('C', 999), '🔴');
+  assert.equal(icon('CP', vert), '🟢');
+  assert.equal(icon('C', vert - 1), '🟠');
+  assert.equal(icon('C', orange), '🟠');
+  assert.equal(icon('C', orange - 1), '🔴');
   assert.equal(icon('CP', 0), '🔴');
   assert.equal(icon('BC', 50), null);
   assert.equal(icon('CO', 5000), null);

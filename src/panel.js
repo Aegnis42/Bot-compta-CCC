@@ -15,7 +15,7 @@ import {
   listContracts, getStock, createContract, deliverContract, cancelContract, setContractPrices, isOpen,
 } from './contrats.js';
 import {
-  activeCharbonniers, findByUser, setCitizenship, setPlafond, salariesForWeek,
+  activeCharbonniers, findByUser, findAny, setCitizenship, setPlafond, salariesForWeek,
 } from './charbonniers.js';
 import { bumpDepositMenu } from './depositMenu.js';
 import { recordPurchase, recordFood } from './achats.js';
@@ -24,6 +24,7 @@ import { lastWeeks } from './historique.js';
 import { sendPayNotices } from './sync.js';
 import {
   addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow, depositAndEmbed,
+  resolveForDeletion, deletionPreview, deleteCharbonnierFlow,
 } from './actions.js';
 import * as ui from './ui.js';
 
@@ -60,6 +61,8 @@ const SECTIONS = [
     btn('ch-cit', 'Réglages', '⚙️'),
     btn('ch-liste', 'Liste', '📋'),
     btn('ch-del', 'Retirer', '➖', ButtonStyle.Danger),
+  ], [
+    btn('ch-supp', 'Supprimer définitivement', '🗑️', ButtonStyle.Danger),
   ]],
   ['### 💰 Paie & finances', [
     btn('sal', 'Salaires', '💰', ButtonStyle.Primary),
@@ -112,10 +115,9 @@ function buildPanel(s) {
     .addSeparatorComponents((sep) => sep.setDivider(true).setSpacing(SeparatorSpacingSize.Large))
     .addTextDisplayComponents((t) => t.setContent(summary))
     .addSeparatorComponents((sep) => sep.setDivider(true).setSpacing(SeparatorSpacingSize.Large));
-  for (const [title, buttons] of SECTIONS) {
-    container
-      .addTextDisplayComponents((t) => t.setContent(title))
-      .addActionRowComponents((row) => row.setComponents(buttons));
+  for (const [title, ...rows] of SECTIONS) {
+    container.addTextDisplayComponents((t) => t.setContent(title));
+    for (const buttons of rows) container.addActionRowComponents((row) => row.setComponents(buttons));
   }
   return container;
 }
@@ -124,6 +126,15 @@ let lastKey = null;
 let refreshing = null;
 
 /** Crée ou met à jour le message du panneau (seulement si son contenu a changé, sauf `force`). */
+/** Récapitulatif + bouton rouge de confirmation avant de supprimer un charbonnier. */
+export async function deletionPrompt(guild, c) {
+  const key = c.discordId || `n:${c.name}`;
+  return {
+    content: await deletionPreview(guild, c),
+    components: [new ActionRowBuilder().setComponents(btn(`ch-supp-ok:${key}`, 'Oui, supprimer définitivement', '🗑️', ButtonStyle.Danger))],
+  };
+}
+
 export async function refreshPanel(client, { force = false } = {}) {
   if (!env.panelChannelId) return;
   if (refreshing) return refreshing;
@@ -268,6 +279,10 @@ const MODALS = {
         label: `${v} ${env.currency}${v === PLAFOND.base ? ' (de base)' : ''}`, value: String(v), emoji: '💰',
       })),
     ]),
+  ),
+  'ch-supp': () => modal('ch-supp', 'Supprimer un charbonnier',
+    (l) => l.setLabel('Charbonnier (membre Discord)').setUserSelectMenuComponent((s) => s.setCustomId('membre').setRequired(false)),
+    text('nom', 'Ou son nom exact', { placeholder: 's\'il n\'est plus sur Discord', required: false, max: 30 }),
   ),
   'ch-del': () => modal('ch-del', 'Retirer un charbonnier',
     (l) => l.setLabel('Charbonnier à désactiver').setUserSelectMenuComponent((s) => s.setCustomId('membre').setRequired(true)),
@@ -415,6 +430,16 @@ const SUBMITS = {
     return { content: `⚙️ **${c.name}**\n${lines.join('\n')}` };
   },
 
+  async 'ch-supp'(i) {
+    let user = null;
+    try {
+      user = i.fields.getSelectedUsers('membre')?.first() ?? null;
+    } catch { /* aucun membre choisi */ }
+    const name = i.fields.getTextInputValue('nom').trim();
+    if (!user && !name) throw new UserError('Choisis un membre ou écris le nom du charbonnier.');
+    return deletionPrompt(i.guild, resolveForDeletion({ user, name }));
+  },
+
   async 'ch-del'(i) {
     return { content: await removeCharbonnierFlow(firstUser(i, 'membre')) };
   },
@@ -530,6 +555,16 @@ export async function handlePanelInteraction(i) {
     if (action === 'refresh') {
       await i.deferUpdate();
       await refreshPanel(i.client, { force: true });
+      return true;
+    }
+    if (action.startsWith('ch-supp-ok:')) {
+      const key = action.slice('ch-supp-ok:'.length);
+      await i.deferUpdate();
+      const c = key.startsWith('n:') ? findAny({ name: key.slice(2) }) : findAny({ userId: key });
+      if (!c) throw new UserError('Ce charbonnier n\'existe plus (déjà supprimé ?).');
+      const msg = await deleteCharbonnierFlow({ guild: i.guild, c });
+      await i.editReply({ content: msg, embeds: [], components: [] });
+      schedulePanelRefresh();
       return true;
     }
     if (MODALS[action]) {

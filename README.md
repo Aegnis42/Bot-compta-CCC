@@ -94,6 +94,7 @@ Réservé au staff (mêmes droits que les commandes). Le bot doit pouvoir voir e
 | `/recurrents liste` · `/recurrents arreter id` | staff | Contrats hebdomadaires : avec l'option `hebdomadaire` de `/contrat creer` ou `/nourriture`, le contrat est recréé automatiquement chaque lundi à 00h (colonne « Hebdomadaire » = OUI dans le Sheet) |
 | `/charbonnier ajouter membre [nom] [salon]` | staff | Crée le salon privé + l'onglet |
 | `/charbonnier retirer membre` · `/charbonnier liste` | staff | Gestion des charbonniers |
+| `/charbonnier supprimer [membre] [nom]` | staff | Supprime définitivement un charbonnier (salon Discord, onglet du Sheet, ligne Charbonniers) après confirmation ; son charbon déposé reste dans le stock (reporté en ajustement manuel). Aussi dans le panneau : 👥 🗑️ Supprimer définitivement |
 | `/setup [categorie]` | staff | Initialise le bot : onglets du Sheet, formules, et catégorie Discord où ranger les salons des charbonniers (créée si besoin, salons existants déplacés) |
 
 « Staff » = permission *Gérer le serveur*, le rôle `STAFF_ROLE_ID`, un rôle listé dans `ADMIN_ROLE_IDS` (le rôle 🏛️ Intendant `1551416821998161990` est autorisé par défaut) ou un compte listé dans `ADMIN_IDS` (les comptes de `adminIds` dans `src/config.js` sont autorisés par défaut). Les commandes staff sont visibles par tous mais le bot refuse les autres membres.
