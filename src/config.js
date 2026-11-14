@@ -45,9 +45,9 @@ export const PAIE = { weekday: 0, hour: 17, lieu: 'aux locaux de la CCC' };
 export const STOCK_LEVELS = {
   codes: ['CP', 'C'],
   levels: [
-    { min: 8000, icon: '🔒', label: 'stock plein' },
-    { min: 2000, icon: '🟢', label: 'bon niveau' },
-    { min: 1000, icon: '🟠', label: 'niveau moyen' },
+    { min: 20000, icon: '🔒', label: 'stock plein' },
+    { min: 5000, icon: '🟢', label: 'bon niveau' },
+    { min: 3000, icon: '🟠', label: 'niveau moyen' },
     { min: -Infinity, icon: '🔴', label: 'stock bas' },
   ],
 };
