@@ -18,13 +18,14 @@ import {
   activeCharbonniers, findByUser, findAny, setCitizenship, setPlafond, salariesForWeek,
 } from './charbonniers.js';
 import { bumpDepositMenu } from './depositMenu.js';
+import { lockIcon, isBlocked, setBlocked, BLOCKABLE, blockSummary } from './rachat.js';
 import { recordPurchase, recordFood } from './achats.js';
 import { listRecurring, stopRecurring } from './recurrents.js';
 import { lastWeeks } from './historique.js';
 import { sendPayNotices } from './sync.js';
 import {
   addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow, depositAndEmbed,
-  resolveForDeletion, deletionPreview, deleteCharbonnierFlow,
+  resolveForDeletion, deletionPreview, deleteCharbonnierFlow, setRachatFlow,
 } from './actions.js';
 import * as ui from './ui.js';
 
@@ -72,6 +73,7 @@ const SECTIONS = [
   ['### ⚙️ Réglages', [
     btn('set-cat', 'Catégorie charbonniers', '📁'),
     btn('set-stock', 'Salons de stock', '📦'),
+    btn('rachat', 'Rachat BC / CO', '🔒'),
     btn('set-sheet', 'Mettre à jour le Sheet', '🔄'),
     btn('refresh', 'Actualiser', '♻️'),
   ]],
@@ -97,7 +99,8 @@ async function loadSummary() {
 function buildPanel(s) {
   const stockLines = PRODUCTS.map((p) => {
     const qty = s.stock[p.code]?.stock ?? 0;
-    return `${stockLevel(p.code, qty)?.icon ?? '▫️'} ${p.name} — **${ui.fmt(qty)}**`;
+    const lock = lockIcon(p.code);
+    return `${stockLevel(p.code, qty)?.icon ?? (lock || '▫️')} ${p.name} — **${ui.fmt(qty)}**${lock ? ` · rachat ${isBlocked(p.code) ? 'bloqué' : 'ouvert'}` : ''}`;
   });
   const attendu = s.open.reduce((sum, ct) => sum + ct.benefice, 0);
   const summary = [
@@ -288,6 +291,12 @@ const MODALS = {
     (l) => l.setLabel('Charbonnier à désactiver').setUserSelectMenuComponent((s) => s.setCustomId('membre').setRequired(true)),
     choice('confirm', 'Confirmation', [{ label: 'Oui, le désactiver (historique conservé)', value: 'oui', emoji: '➖' }]),
   ),
+  rachat: () => modal('rachat', 'Rachat de la Briquette et du Coke',
+    ...BLOCKABLE.map((code) => choice(code, PRODUCTS.find((p) => p.code === code).name, [
+      { label: 'Rachat ouvert', value: 'ouvert', emoji: '🔓', default: !isBlocked(code) },
+      { label: 'Rachat bloqué', value: 'bloque', emoji: '🔒', default: isBlocked(code) },
+    ])),
+  ),
   'set-cat': () => modal('set-cat', 'Catégorie des salons charbonniers',
     text('nom', 'Nom de la catégorie', { placeholder: 'ex : ⛏️ Charbonniers', max: 100 }),
   ),
@@ -442,6 +451,16 @@ const SUBMITS = {
 
   async 'ch-del'(i) {
     return { content: await removeCharbonnierFlow(firstUser(i, 'membre')) };
+  },
+
+  async rachat(i) {
+    const changes = {};
+    for (const code of BLOCKABLE) {
+      const v = selected(i, code);
+      if (v && (v === 'bloque') !== isBlocked(code)) changes[code] = v === 'bloque';
+    }
+    return { content: `${await setRachatFlow(i.client, changes)}
+-# État actuel : ${blockSummary()}` };
   },
 
   async 'set-cat'(i) {

@@ -180,3 +180,12 @@ test('accès staff : comptes admin ajoutés', async () => {
   const member = (id) => ({ id, permissions: { has: () => false }, roles: { cache: { has: () => false } } });
   for (const id of ['1548025252146053201', '386606897236672533', '825110608860676177']) assert.equal(isStaff(member(id)), true);
 });
+
+test('rachat bloquable : seulement la Briquette et le Coke', async () => {
+  const { lockIcon, blockedIn, blockedMessage, BLOCKABLE } = await import('../src/rachat.js');
+  assert.deepEqual(BLOCKABLE, ['BC', 'CO']);
+  assert.equal(lockIcon('BC'), '🔓'); // rien de bloqué par défaut
+  assert.equal(lockIcon('CP'), ''); // pas de cadenas pour le charbon
+  assert.deepEqual(blockedIn({ CP: 10, C: 0, BC: 5, CO: 0 }), []);
+  assert.match(blockedMessage(['CO']), /🔒 \*\*Rachat bloqué.*Coke \(CO\)/s);
+});

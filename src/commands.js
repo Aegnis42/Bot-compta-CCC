@@ -12,7 +12,7 @@ import { listRecurring, stopRecurring } from './recurrents.js';
 import { lastWeeks } from './historique.js';
 import {
   addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow, depositAndEmbed,
-  resolveForDeletion,
+  resolveForDeletion, setRachatFlow,
 } from './actions.js';
 import { handlePanelInteraction, schedulePanelRefresh, deletionPrompt } from './panel.js';
 import { isStaff } from './access.js';
@@ -106,6 +106,12 @@ export const commandDefs = [
     .addSubcommand((s) => s.setName('arreter').setDescription('Arrêter la répétition d\'un contrat')
       .addStringOption((o) => o.setName('id').setDescription('CT-… ou NR-…').setRequired(true).setAutocomplete(true))),
 
+  new SlashCommandBuilder().setName('rachat').setDescription('Bloquer 🔒 ou débloquer 🔓 le rachat de la Briquette et du Coke')
+    .addStringOption((o) => o.setName('produit').setDescription('Produit concerné').setRequired(true)
+      .addChoices({ name: 'Briquette (BC)', value: 'BC' }, { name: 'Coke (CO)', value: 'CO' }, { name: 'Briquette et Coke', value: 'BC,CO' }))
+    .addStringOption((o) => o.setName('etat').setDescription('Bloquer ou débloquer').setRequired(true)
+      .addChoices({ name: '🔒 Bloquer', value: 'bloquer' }, { name: '🔓 Débloquer', value: 'debloquer' })),
+
   new SlashCommandBuilder().setName('charbonnier').setDescription('Gestion des charbonniers')
     .addSubcommand((s) => s.setName('ajouter').setDescription('Ajouter un charbonnier (crée son salon et son onglet)')
       .addUserOption((o) => o.setName('membre').setDescription('Le membre Discord').setRequired(true))
@@ -135,7 +141,7 @@ const EPHEMERAL = new Set(['avis-paie', 'salaires', 'setup', 'charbonnier', 'sto
 export { isStaff };
 
 // Commandes réservées au staff (vérifiées par le bot avant exécution)
-const STAFF_COMMANDS = new Set(['achat', 'nourriture', 'recurrents', 'historique', 'stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
+const STAFF_COMMANDS = new Set(['rachat', 'achat', 'nourriture', 'recurrents', 'historique', 'stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
 
 /** Prix perso saisis dans la commande : { CP: 0.9, ... } (seulement les options renseignées). */
 function readPrices(i) {
@@ -221,6 +227,12 @@ const handlers = {
     const week = weekFrom(i);
     const sent = await sendPayNotices(i.client, week);
     await i.editReply(sent ? `✅ ${sent} avis de paie envoyé(s) pour la semaine du ${week}.` : `Aucun charbonnier n'a de salaire pour la semaine du ${week}.`);
+  },
+
+  async rachat(i) {
+    const blocked = i.options.getString('etat', true) === 'bloquer';
+    const changes = Object.fromEntries(i.options.getString('produit', true).split(',').map((code) => [code, blocked]));
+    await i.editReply(await setRachatFlow(i.client, changes));
   },
 
   async achat(i) {

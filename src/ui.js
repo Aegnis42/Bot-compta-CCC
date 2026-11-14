@@ -2,6 +2,7 @@ import { EmbedBuilder } from 'discord.js';
 import { env, PRODUCTS, stockLevel, STOCK_LEVELS } from './config.js';
 import { isOpen } from './contrats.js';
 import { contractUnitPrice } from './prices.js';
+import { lockIcon, isBlocked } from './rachat.js';
 
 export const COLORS = { ok: 0x2ecc71, info: 0x3498db, warn: 0xe67e22, err: 0xe74c3c, sheet: 0x0f9d58, coal: 0x2c2f33 };
 
@@ -69,7 +70,9 @@ export function stockEmbed(stock) {
   const lines = PRODUCTS.map((p) => {
     const s = stock[p.code];
     const level = stockLevel(p.code, s.stock);
-    let line = `${level ? `${level.icon} ` : ''}**${p.name} (${p.code})** : **${fmt(s.stock)}** en stock${level ? ` (${level.label})` : ''}`;
+    const lock = lockIcon(p.code);
+    let line = `${level ? `${level.icon} ` : lock ? `${lock} ` : ''}**${p.name} (${p.code})** : **${fmt(s.stock)}** en stock`
+      + `${level ? ` (${level.label})` : lock ? ` (rachat ${isBlocked(p.code) ? 'bloqué' : 'ouvert'})` : ''}`;
     if (s.reste > 0) line += ` · ${fmt(s.reste)} à livrer`;
     if (s.aProduire > 0) line += ` · ⚠️ **${fmt(s.aProduire)} à produire**`;
     return line;

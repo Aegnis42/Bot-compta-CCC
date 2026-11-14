@@ -2,6 +2,7 @@ import { ChannelType, OverwriteType, PermissionFlagsBits as P } from 'discord.js
 import { env, PRODUCTS, stockLevel } from './config.js';
 import { getStock, listContracts, isOpen } from './contrats.js';
 import { getSetting, setSetting } from './settings.js';
+import { lockIcon } from './rachat.js';
 import * as ui from './ui.js';
 
 // Catégorie privée affichant le stock :
@@ -19,8 +20,8 @@ let clientRef = null;
 
 function channelName(p, stock) {
   const qty = Math.round(stock[p.code]?.stock ?? 0);
-  const level = stockLevel(p.code, qty);
-  return `${p.name} | ${qty}${level ? ` ${level.icon}` : ''}`;
+  const icon = stockLevel(p.code, qty)?.icon || lockIcon(p.code); // niveau (CP, C) ou cadenas de rachat (BC, CO)
+  return `${p.name} | ${qty}${icon ? ` ${icon}` : ''}`;
 }
 
 async function fetchChannel(guild, id, type) {

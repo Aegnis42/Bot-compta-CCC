@@ -5,6 +5,7 @@ import { PRODUCTS } from './config.js';
 import { isStaff } from './access.js';
 import { UserError, emptyQty, hasQty } from './utils.js';
 import { getPrices } from './prices.js';
+import { isBlocked } from './rachat.js';
 import { weekLabel } from './time.js';
 import { activeCharbonniers, findByChannel, deleteDeposit, weekSummary } from './charbonniers.js';
 import { depositAndEmbed } from './actions.js';
@@ -22,7 +23,9 @@ const button = (id, label, emoji, style = ButtonStyle.Secondary) =>
 
 function buildMenu(c) {
   const prices = getPrices();
-  const tarifs = PRODUCTS.map((p) => `${p.code} **${ui.fmt(prices[p.code].rachat + (c.bonus || 0))}**`).join(' · ');
+  const tarifs = PRODUCTS.map((p) => (isBlocked(p.code)
+    ? `${p.code} 🔒 _rachat bloqué_`
+    : `${p.code} **${ui.fmt(prices[p.code].rachat + (c.bonus || 0))}**`)).join(' · ');
   return new ContainerBuilder()
     .setAccentColor(0x2c2f33)
     .addTextDisplayComponents((t) => t.setContent([

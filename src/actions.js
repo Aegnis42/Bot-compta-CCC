@@ -12,7 +12,8 @@ import {
 } from './charbonniers.js';
 import { weekLabel } from './time.js';
 import * as ui from './ui.js';
-import { ensureDepositMenu } from './depositMenu.js';
+import { ensureDepositMenu, ensureAllDepositMenus } from './depositMenu.js';
+import { setBlocked } from './rachat.js';
 
 // Actions partagées par les commandes slash et le panneau de gestion.
 
@@ -190,4 +191,20 @@ export async function stockSalonsFlow({ guild, client, name, role }) {
   if (role) lines.push(`👁️ Le rôle ${role} peut voir le stock.`);
   lines.push('Seuls les rôles autorisés (et les admins) voient la catégorie.');
   return lines.join('\n');
+}
+
+/**
+ * Bloque / débloque le rachat de la Briquette et/ou du Coke (changes = { BC: true, CO: false }),
+ * puis met à jour l'affichage : stock (salons, tableau) et menus de dépôt des charbonniers.
+ */
+export async function setRachatFlow(client, changes) {
+  const lines = [];
+  for (const [code, blocked] of Object.entries(changes)) {
+    await setBlocked(code, blocked);
+    const name = PRODUCTS.find((p) => p.code === code).name;
+    lines.push(blocked ? `🔒 Rachat **bloqué** : ${name} (${code})` : `🔓 Rachat **ouvert** : ${name} (${code})`);
+  }
+  scheduleStockRefresh();
+  ensureAllDepositMenus(client).catch(() => {}); // met à jour les menus sur place (prix affichés)
+  return lines.join('\n') || 'Rien n\'a été modifié.';
 }

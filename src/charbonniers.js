@@ -3,6 +3,7 @@ import { getStock } from './contrats.js';
 import * as gs from './sheets.js';
 import { COLS, SALAIRES_FIRST_ROW, weekFormula, salairesHeader, recapDynamicWrites } from './setup.js';
 import { getSetting } from './settings.js';
+import { blockedIn, blockedMessage } from './rachat.js';
 import { toSheetSerial, weekOfSerial } from './time.js';
 import { UserError, num, qtyFrom, emptyQty, addQty, lastDataRow, newRef, round2 } from './utils.js';
 
@@ -301,6 +302,9 @@ const fmtN = (n) => Math.round(n).toLocaleString('fr-FR');
 /** Enregistre un dépôt dans l'onglet du charbonnier (refusé si le stock du produit est déjà plein). */
 export function recordDeposit(c, qty, { source = 'Discord', note = '' } = {}) {
   return gs.withLock(async () => {
+    // Rachat bloqué (Briquette / Coke) : dépôt refusé en entier
+    const blocked = blockedIn(qty);
+    if (blocked.length) throw new UserError(blockedMessage(blocked));
     // Vérifié sous le verrou, sur le stock à jour (dépôts précédents compris)
     const stock = Object.fromEntries(Object.entries(await getStock()).map(([code, s]) => [code, s.stock]));
     const over = overCapacity(qty, stock);
