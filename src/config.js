@@ -12,7 +12,7 @@ export const env = {
   categoryId: process.env.CHARBONNIER_CATEGORY_ID || null,
   staffRoleId: process.env.STAFF_ROLE_ID || null,
   // Comptes Discord autorisés à utiliser toutes les commandes, en plus des admins (« Gérer le serveur »)
-  adminIds: [...new Set(['1222839727934279692', '1548025252146053201', '386606897236672533', '825110608860676177', ...String(process.env.ADMIN_IDS ?? '').split(/[\s,;]+/)].filter(Boolean))],
+  adminIds: [...new Set(['1222839727934279692', '1548025252146053201', '386606897236672533', '825110608860676177', '422140892212887553', ...String(process.env.ADMIN_IDS ?? '').split(/[\s,;]+/)].filter(Boolean))],
   // Rôles Discord autorisés à utiliser toutes les commandes
   adminRoleIds: [...new Set(['1551416821998161990', ...String(process.env.ADMIN_ROLE_IDS ?? '').split(/[\s,;]+/)].filter(Boolean))],
   recapChannelId: process.env.RECAP_CHANNEL_ID || null,
@@ -76,7 +76,7 @@ export function overCapacity(qty, stock) {
 // Il est recopié dans la colonne « Bonus rachat » de l'onglet Charbonniers, où il peut ensuite être modifié.
 export const BONUS_RACHAT = {
   montant: 0.0,
-  ids: ['1222839727934279692', '129187703173545984', '422140892212887553', '713178170534133862', '209679108861329408'],
+  ids: ['1222839727934279692', '129187703173545984', '422140892212887553', '713178170534133862', '209679108861329408','422140892212887553'],
 };
 
 // Plafond de salaire hebdomadaire d'un charbonnier (septimes) : 600 par défaut, jusqu'à 1000 au maximum.
