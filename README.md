@@ -5,7 +5,7 @@ Bot Discord qui tient la comptabilité des charbonniers dans un Google Sheet :
 - **Chaque charbonnier a son salon Discord** : il y écrit ce qu'il a déposé (`300 CP`, `120 C 40 BC`…). Le bot l'inscrit dans **son onglet** du Google Sheet et lui répond avec son total de la semaine.
 - **Sheet → Discord** : si quelqu'un ajoute une ligne à la main dans l'onglet d'un charbonnier, le bot l'annonce dans le salon du charbonnier (vérification toutes les 30 s).
 - **Salaires** : onglet `Salaires` avec ce qui est dû à chaque charbonnier pour la semaine (+ commande `/salaires`).
-- **Avis de paie** : chaque **dimanche à 17h** (heure de Paris), le bot pingue chaque charbonnier dans son salon avec son salaire de la semaine et lui dit de venir le chercher aux locaux de la CCC.
+- **Avis de paie** : chaque **samedi à 17h** (heure de Paris), le bot pingue chaque charbonnier dans son salon avec son salaire de la semaine et lui dit de venir le chercher aux locaux de la CCC.
 - **Stock** : déposé − livré + ajustements manuels, avec ce qu'il reste à produire pour honorer les contrats.
 - **Contrats** : commandes clients, livraisons partielles depuis le stock, reste à livrer et ce qu'il manque en stock.
 
@@ -44,7 +44,7 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 
 **Ajouter un dépôt à la main** dans l'onglet d'un charbonnier : remplir la date (facultatif) et les quantités sur une nouvelle ligne, laisser `Réf` vide. Le bot complète la ligne et prévient le charbonnier sur Discord.
 
-**Semaines** : du lundi au dimanche, notées `28/09/2026 au 04/10/2026`. Dans les commandes, l'option `semaine` accepte n'importe quel jour de la semaine (`29/09`) ou `derniere`.
+**Semaines** : du **dimanche au samedi** depuis le 22/11/2026 (avant le 16/11/2026 : du lundi au dimanche ; semaine de transition du lundi 16 au samedi 21/11/2026), notées `22/11/2026 au 28/11/2026`. Avis de paie le **samedi à 17h**, renouvellement des contrats hebdomadaires et clôture de l'Historique le **dimanche à 00h**. Dans les commandes, l'option `semaine` accepte n'importe quel jour de la semaine (`29/09`) ou `derniere`.
 
 ## Plafond de salaire hebdomadaire
 
@@ -92,7 +92,7 @@ Réservé au staff (mêmes droits que les commandes). Le bot doit pouvoir voir e
 | `/recap [semaine] [membre]` | charbonnier | Dépôts et salaire de la semaine |
 | `/stock` | tous | Stock (avec niveau 🔒 🟢 🟠 🔴 pour CP et C), reste à livrer, à produire. Une fois le stock de CP / C à 8000 ou plus (🔒), leurs dépôts sont refusés |
 | `/stock-salons [categorie] [role]` | staff | Catégorie privée avec un salon vocal par marchandise affichant le stock (`Charbon | 3200`), visible seulement par les rôles choisis. Les noms des salons vocaux suivent le stock dans la limite de Discord (2 renommages / 10 min par salon) ; le salon `📦-stock-en-direct` affiche un tableau mis à jour instantanément |
-| `/avis-paie [semaine]` | staff | Envoie tout de suite les avis de paie (sinon automatique le dimanche à 17h) |
+| `/avis-paie [semaine]` | staff | Envoie tout de suite les avis de paie (sinon automatique le samedi à 17h) |
 | `/salaires [semaine]` | staff | Salaires de tous les charbonniers |
 | `/contrat creer client tarif cp c bc co [note]` | staff | Nouveau contrat (ID auto `CT-001`…) |
 | `/contrat livrer id [cp c bc co]` | staff | Livre depuis le stock (sans quantité : le maximum possible) |
@@ -143,7 +143,7 @@ Pour qu'il tourne en permanence, l'héberger sur un VPS / Raspberry Pi (avec `pm
 ### Options (`.env`)
 - `CHARBONNIER_CATEGORY_ID` : catégorie où créer les salons des charbonniers.
 - `STAFF_ROLE_ID` : rôle qui voit tous les salons charbonniers et a les droits staff.
-- `RECAP_CHANNEL_ID` : salon staff où poster le récapitulatif des salaires en même temps que les avis de paie (dimanche 17h).
+- `RECAP_CHANNEL_ID` : salon staff où poster le récapitulatif des salaires en même temps que les avis de paie (samedi 17h).
 - Jour, heure et lieu de la paie : `PAIE` dans `src/config.js`.
 - `SYNC_INTERVAL_SECONDS` : fréquence de lecture du Sheet (30 s par défaut).
 

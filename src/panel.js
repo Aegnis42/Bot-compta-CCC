@@ -225,7 +225,7 @@ const MODALS = {
     choice('tarif', 'Tarif', [{ label: TARIFS.normal, value: TARIFS.normal, emoji: '🏷️' }, { label: TARIFS.chatelerie, value: TARIFS.chatelerie, emoji: '🏰' }]),
     text('qty', 'Quantités commandées', { placeholder: QTY_HINT }),
     text('prix', 'Prix perso par unité (optionnel)', { placeholder: 'ex : CP 0,9 C 1,8 (vide = tarif)', required: false }),
-    choice('hebdo', 'Se répète chaque semaine ?', [{ label: 'Non', value: 'non', default: true }, { label: 'Oui, recréé chaque lundi', value: 'oui', emoji: '🔁' }]),
+    choice('hebdo', 'Se répète chaque semaine ?', [{ label: 'Non', value: 'non', default: true }, { label: 'Oui, recréé chaque dimanche', value: 'oui', emoji: '🔁' }]),
   ),
   'ct-livrer': () => {
     needContracts();
@@ -258,7 +258,7 @@ const MODALS = {
   nour: () => modal('nour', 'Contrat nourriture',
     text('montant', `Montant payé (${env.currency})`, { placeholder: 'ex : 350' }),
     text('note', 'Note (optionnel)', { required: false, max: 200 }),
-    choice('hebdo', 'Se répète chaque semaine ?', [{ label: 'Non', value: 'non', default: true }, { label: 'Oui, recréé chaque lundi', value: 'oui', emoji: '🔁' }]),
+    choice('hebdo', 'Se répète chaque semaine ?', [{ label: 'Non', value: 'non', default: true }, { label: 'Oui, recréé chaque dimanche', value: 'oui', emoji: '🔁' }]),
   ),
   'ch-add': () => modal('ch-add', 'Ajouter un charbonnier',
     (l) => l.setLabel('Membre').setUserSelectMenuComponent((s) => s.setCustomId('membre').setRequired(true)),
@@ -401,7 +401,7 @@ const SUBMITS = {
     const montant = amountFrom(i.fields.getTextInputValue('montant'), 'Montant');
     const hebdo = selected(i, 'hebdo') === 'oui';
     const { id } = await recordFood({ montant, note: i.fields.getTextInputValue('note').trim(), par: i.user.username, hebdo });
-    return { content: `🍖 Contrat nourriture **${id}** enregistré : **${ui.money(montant)}**${hebdo ? ' · 🔁 recréé chaque lundi' : ''}.` };
+    return { content: `🍖 Contrat nourriture **${id}** enregistré : **${ui.money(montant)}**${hebdo ? ' · 🔁 recréé chaque dimanche' : ''}.` };
   },
 
   async 'ch-add'(i) {
@@ -499,9 +499,9 @@ const VIEWS = {
       ...contracts.map((ct) => ({ label: `${ct.id} — ${ct.client}`, description: `${ui.qtyInline(ct.cmd)} · ${ui.money(ct.montant)}`, value: ct.id, emoji: '📜' })),
       ...food.map((f) => ({ label: `${f.id} — nourriture ${ui.money(f.montant)}`, description: f.note || 'Contrat nourriture', value: f.id, emoji: '🍖' })),
     ].map((o) => ({ ...o, label: o.label.slice(0, 100), description: o.description.slice(0, 100) }));
-    if (!items.length) return { content: '🔁 Aucun contrat hebdomadaire. Choisis « Oui, recréé chaque lundi » en créant un contrat ou une nourriture.' };
+    if (!items.length) return { content: '🔁 Aucun contrat hebdomadaire. Choisis « Oui, recréé chaque dimanche » en créant un contrat ou une nourriture.' };
     return {
-      content: `🔁 **Contrats hebdomadaires** (recréés chaque lundi à 00h) :\n${items.map((o) => `${o.emoji} **${o.label}** · ${o.description}`).join('\n')}`,
+      content: `🔁 **Contrats hebdomadaires** (recréés chaque dimanche à 00h) :\n${items.map((o) => `${o.emoji} **${o.label}** · ${o.description}`).join('\n')}`,
       components: [new ActionRowBuilder().setComponents(
         new StringSelectMenuBuilder().setCustomId('pn:rec-stop').setPlaceholder('Arrêter la répétition de…').addOptions(items.slice(0, 25).map(opt)),
       )],
@@ -531,7 +531,7 @@ const VIEWS = {
 
   async avis() {
     return {
-      content: `📨 Envoyer maintenant à chaque charbonnier son avis de paie de la semaine du **${weekLabel()}** ?\n-# (C'est fait automatiquement le dimanche à 17h.)`,
+      content: `📨 Envoyer maintenant à chaque charbonnier son avis de paie de la semaine du **${weekLabel()}** ?\n-# (C'est fait automatiquement le samedi à 17h.)`,
       components: [new ActionRowBuilder().setComponents(btn('avis-ok', 'Oui, envoyer les avis', '📨', ButtonStyle.Danger))],
     };
   },

@@ -40,7 +40,11 @@ export const PRODUCTS = [
 export const CODES = PRODUCTS.map((p) => p.code);
 
 // Avis de paie : jour (0 = dimanche) et heure (fuseau TIMEZONE) où chaque charbonnier est prévenu dans son salon
-export const PAIE = { weekday: 0, hour: 17, lieu: 'aux locaux de la CCC' };
+export const PAIE = { weekday: 6, hour: 17, lieu: 'aux locaux de la CCC' }; // 6 = samedi, dernier jour de la semaine
+
+// Semaines : du DIMANCHE au SAMEDI à partir du dimanche 22/11/2026. Avant le 16/11/2026 : du lundi au dimanche
+// (semaines déjà payées et clôturées, inchangées). Semaine de transition : du lundi 16/11 au samedi 21/11/2026.
+export const SEMAINE = { transition: [2026, 11, 16], dimanche: [2026, 11, 22] };
 
 // Niveaux de stock affichés sur Discord (salons vocaux, tableau, /stock). Du plus haut au plus bas : le premier
 // palier atteint l'emporte (ex : 2500 → 🟢). Produits non listés : pas d'indicateur.

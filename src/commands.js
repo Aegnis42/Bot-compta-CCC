@@ -66,7 +66,7 @@ export const commandDefs = [
   new SlashCommandBuilder().setName('production-salons').setDescription('Crée une catégorie publique : ce qu’il faut produire pour les commandes en cours, en direct')
     .addStringOption((o) => o.setName('categorie').setDescription('Nom de la catégorie (par défaut : À produire)').setMaxLength(100)),
 
-  new SlashCommandBuilder().setName('avis-paie').setDescription('Envoyer maintenant à chaque charbonnier son avis de paie (auto : dimanche 17h)')
+  new SlashCommandBuilder().setName('avis-paie').setDescription('Envoyer maintenant à chaque charbonnier son avis de paie (auto : samedi 17h)')
     .addStringOption(weekOption),
 
   new SlashCommandBuilder().setName('salaires').setDescription('Salaires de tous les charbonniers pour une semaine')
@@ -79,7 +79,7 @@ export const commandDefs = [
         .addStringOption((o) => o.setName('tarif').setDescription('Grille de prix').setRequired(true)
           .addChoices({ name: TARIFS.normal, value: TARIFS.normal }, { name: TARIFS.chatelerie, value: TARIFS.chatelerie })),
     )).addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)'))
-      .addBooleanOption((o) => o.setName('hebdomadaire').setDescription('Se répète chaque semaine (recréé automatiquement le lundi)')))
+      .addBooleanOption((o) => o.setName('hebdomadaire').setDescription('Se répète chaque semaine (recréé automatiquement le dimanche)')))
     .addSubcommand((s) => addQtyOptions(
       s.setName('livrer').setDescription('Livrer depuis le stock (sans quantité : livre le maximum possible)').addStringOption(contractIdOption),
     ))
@@ -99,7 +99,7 @@ export const commandDefs = [
   new SlashCommandBuilder().setName('nourriture').setDescription('Enregistrer un contrat nourriture (déduit du bénéfice de la semaine)')
     .addNumberOption((o) => o.setName('montant').setDescription(`Montant payé (${env.currency})`).setRequired(true).setMinValue(0))
     .addStringOption((o) => o.setName('note').setDescription('Remarque (optionnel)'))
-    .addBooleanOption((o) => o.setName('hebdomadaire').setDescription('Se répète chaque semaine (recréé automatiquement le lundi)')),
+    .addBooleanOption((o) => o.setName('hebdomadaire').setDescription('Se répète chaque semaine (recréé automatiquement le dimanche)')),
 
   new SlashCommandBuilder().setName('historique').setDescription('Chiffres des dernières semaines terminées (onglet Historique)')
     .addIntegerOption((o) => o.setName('semaines').setDescription('Nombre de semaines à afficher (6 par défaut)').setMinValue(1).setMaxValue(20)),
@@ -269,7 +269,7 @@ const handlers = {
     const hebdo = i.options.getBoolean('hebdomadaire') ?? false;
     const { id } = await recordFood({ montant, note: i.options.getString('note') ?? '', par: i.user.username, hebdo });
     await i.editReply(`🍖 Contrat nourriture **${id}** enregistré : **${ui.money(montant)}**, déduit du bénéfice de la semaine (récap Feuille 1).`
-      + (hebdo ? '\n🔁 Hebdomadaire : il sera recréé chaque lundi (`/recurrents arreter` pour l\'arrêter).' : ''));
+      + (hebdo ? '\n🔁 Hebdomadaire : il sera recréé chaque dimanche (`/recurrents arreter` pour l\'arrêter).' : ''));
   },
 
   async historique(i) {
@@ -288,7 +288,7 @@ const handlers = {
       ...food.map((f) => `🍖 **${f.id}** — nourriture : ${ui.money(f.montant)}${f.note ? ` (${f.note})` : ''}`),
     ];
     await i.editReply(lines.length
-      ? `🔁 **Contrats hebdomadaires** (recréés chaque lundi) :\n${lines.join('\n')}`
+      ? `🔁 **Contrats hebdomadaires** (recréés chaque dimanche) :\n${lines.join('\n')}`
       : 'Aucun contrat hebdomadaire. Utilise l\'option `hebdomadaire` de `/contrat creer` ou `/nourriture`.');
   },
 

@@ -30,7 +30,16 @@ test('semaines', () => {
   assert.equal(normalizeWeek('28/09/26'), '28/09/2026 au 04/10/2026');
   assert.equal(normalizeWeek('04/10/2026'), '28/09/2026 au 04/10/2026');
   assert.equal(normalizeWeek('05/10/2026'), '05/10/2026 au 11/10/2026');
-  assert.equal(normalizeWeek('01/01/2027'), '28/12/2026 au 03/01/2027');
+  // Avant le 16/11/2026 : du lundi au dimanche (inchangé)
+  assert.equal(normalizeWeek('15/11/2026'), '09/11/2026 au 15/11/2026');
+  // Semaine de transition : du lundi 16 au samedi 21/11/2026
+  assert.equal(normalizeWeek('16/11/2026'), '16/11/2026 au 21/11/2026');
+  assert.equal(normalizeWeek('21/11/2026'), '16/11/2026 au 21/11/2026');
+  // Ensuite : du dimanche au samedi
+  assert.equal(normalizeWeek('22/11/2026'), '22/11/2026 au 28/11/2026');
+  assert.equal(normalizeWeek('28/11/2026'), '22/11/2026 au 28/11/2026');
+  assert.equal(normalizeWeek('29/11/2026'), '29/11/2026 au 05/12/2026');
+  assert.equal(normalizeWeek('01/01/2027'), '27/12/2026 au 02/01/2027');
   assert.equal(normalizeWeek('31/02/2026'), null);
   assert.equal(normalizeWeek('abc'), null);
 });
@@ -47,13 +56,21 @@ test('formules en paramètres régionaux français', async () => {
   assert.equal(localizeFormula('texte, simple', true), 'texte, simple');
 });
 
-test('heure de la paie : dimanche à partir de 17h', async () => {
+test('heure de la paie : samedi (dernier jour de la semaine) à partir de 17h', async () => {
   const { isPayTime } = await import('../src/sync.js');
-  assert.equal(isPayTime({ weekday: 0, hour: 17 }), true);
-  assert.equal(isPayTime({ weekday: 0, hour: 23 }), true);
-  assert.equal(isPayTime({ weekday: 0, hour: 16 }), false);
-  assert.equal(isPayTime({ weekday: 1, hour: 17 }), false);
-  assert.equal(isPayTime({ weekday: 6, hour: 17 }), false);
+  assert.equal(isPayTime({ weekday: 6, hour: 17 }), true);
+  assert.equal(isPayTime({ weekday: 6, hour: 23 }), true);
+  assert.equal(isPayTime({ weekday: 6, hour: 16 }), false);
+  assert.equal(isPayTime({ weekday: 0, hour: 17 }), false); // dimanche : nouvelle semaine
+  assert.equal(isPayTime({ weekday: 5, hour: 17 }), false);
+});
+
+test('bornes de semaine pour l\'historique (semaine de transition de 6 jours)', async () => {
+  const { weekBoundsSerial } = await import('../src/time.js');
+  const s = (y, m, d) => Date.UTC(y, m - 1, d) / 86400000 + 25569;
+  assert.deepEqual(weekBoundsSerial(s(2026, 11, 12)), { start: s(2026, 11, 9), next: s(2026, 11, 16) });
+  assert.deepEqual(weekBoundsSerial(s(2026, 11, 18) + 0.6), { start: s(2026, 11, 16), next: s(2026, 11, 22) });
+  assert.deepEqual(weekBoundsSerial(s(2026, 11, 25)), { start: s(2026, 11, 22), next: s(2026, 11, 29) });
 });
 
 // Les tests lisent la limite et les prix dans la configuration : ils suivent les réglages de src/config.js.
@@ -208,4 +225,11 @@ test('colonnes : le bois après les colonnes existantes, sans rien décaler', as
   assert.equal(colLetter(33), 'AH');
   const row = []; row[2] = 5; row[11] = 40; // C = 5 CP, L = 40 bois
   assert.deepEqual(qtyAt(row, 'depot'), q(5, 0, 0, 0, 40));
+});
+
+test('même semaine : comparaison par date de début (passage au dimanche)', async () => {
+  const { sameWeek } = await import('../src/time.js');
+  assert.equal(sameWeek('16/11/2026 au 22/11/2026', '16/11/2026 au 21/11/2026'), true);
+  assert.equal(sameWeek('09/11/2026 au 15/11/2026', '16/11/2026 au 21/11/2026'), false);
+  assert.equal(sameWeek(null, '16/11/2026 au 21/11/2026'), false);
 });

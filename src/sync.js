@@ -1,6 +1,6 @@
 import { env, PAIE } from './config.js';
 import * as gs from './sheets.js';
-import { toSheetSerial, weekOfSerial, weekLabel, localClock } from './time.js';
+import { toSheetSerial, weekOfSerial, weekLabel, localClock, sameWeek } from './time.js';
 import { hasQty, newRef, num } from './utils.js';
 import { qtyAt } from './columns.js';
 import { loadPrices, rachatValue } from './prices.js';
@@ -86,7 +86,7 @@ async function syncRegistry() {
   lastSignature = allCharbonniers().map((c) => `${c.name}|${c.tab}|${c.actif}|${c.citoyennete}`).join(';');
 }
 
-// ---------- Avis de paie (dimanche 17h) ----------
+// ---------- Avis de paie (samedi 17h, dernier jour de la semaine) ----------
 
 const PAIE_KEY = 'dernier_avis_paie';
 
@@ -124,7 +124,7 @@ async function payday(client) {
   if (!isPayTime(localClock())) return;
   const week = weekLabel();
   // Mémorisé dans l'onglet Config du Sheet : un seul envoi par semaine, même après un redéploiement
-  if (getSetting(PAIE_KEY) === week) return;
+  if (sameWeek(getSetting(PAIE_KEY), week)) return;
   await setSetting(PAIE_KEY, week);
   const sent = await sendPayNotices(client, week);
   console.log(`[paie] ${sent} avis envoyés pour la semaine du ${week}`);

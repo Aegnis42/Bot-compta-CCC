@@ -2,21 +2,17 @@ import { env, CODES, SHEETS } from './config.js';
 import * as gs from './sheets.js';
 import { getStock } from './contrats.js';
 import { allCharbonniers, readTabs } from './charbonniers.js';
-import { toSheetSerial, weekOfSerial } from './time.js';
+import { toSheetSerial, weekOfSerial, weekBoundsSerial } from './time.js';
 import { num, round2, lastDataRow } from './utils.js';
 import { colLetter } from './columns.js';
 import * as ui from './ui.js';
 
-// Historique : une ligne par semaine terminée (lundi → dimanche), avec les chiffres du récap de la Feuille 1
+// Historique : une ligne par semaine terminée (voir time.js pour les jours de début et de fin), avec les chiffres du récap
 // figés au moment de la clôture (les pourcentages utilisés sont ceux du récap à ce moment-là).
 const H = gs.q(SHEETS.HISTORIQUE);
 
-/** Lundi (numéro de série Sheets, à 00h) de la semaine contenant `serial`. */
-const mondayOf = (serial) => {
-  const day = Math.floor(serial);
-  const weekday = new Date((day - 25569) * 86400000).getUTCDay(); // 0 = dimanche
-  return day - ((weekday + 6) % 7);
-};
+/** Premier jour (numéro de série Sheets, à 00h) de la semaine contenant `serial`. */
+const weekStartOf = (serial) => weekBoundsSerial(serial).start;
 
 /** Paramètres du récap (Feuille 1, colonne I), avec les valeurs par défaut si le récap n'existe pas. */
 async function recapParams() {
@@ -36,9 +32,12 @@ async function loadData() {
   return { livraisons, achats, nourriture, tabs };
 }
 
-/** Chiffres d'une semaine (lundi = numéro de série), mêmes règles que le récap de la Feuille 1. */
-export function weekFigures(monday, data, params) {
-  const inWeek = (r) => typeof r[0] === 'number' && r[0] >= monday && r[0] < monday + 7;
+/**
+ * Chiffres d'une semaine allant de `start` (inclus) à `next` (exclu), en numéros de série ; mêmes règles que le récap
+ * de la Feuille 1. Par défaut, une semaine de 7 jours.
+ */
+export function weekFigures(start, data, params, next = start + 7) {
+  const inWeek = (r) => typeof r[0] === 'number' && r[0] >= start && r[0] < next;
   const sum = (rows, col) => rows.filter(inWeek).reduce((s, r) => s + num(r[col]), 0);
 
   const ca = sum(data.livraisons, 6);
@@ -70,7 +69,7 @@ export function weekFigures(monday, data, params) {
  */
 export function closeFinishedWeeks() {
   return gs.withLock(async () => {
-    const current = mondayOf(toSheetSerial());
+    const current = weekStartOf(toSheetSerial());
     const existingRows = await gs.read(`${H}!A2:A`);
     const existing = new Set(existingRows.map((r) => String(r[0] ?? '')));
     const data = await loadData();
@@ -81,16 +80,16 @@ export function closeFinishedWeeks() {
       .filter((v) => typeof v === 'number');
     if (!dates.length) return [];
     const weeks = [];
-    for (let m = mondayOf(Math.min(...dates)); m < current; m += 7) {
+    for (let m = weekStartOf(Math.min(...dates)); m < current; m = weekBoundsSerial(m).next) {
       if (!existing.has(weekOfSerial(m))) weeks.push(m);
     }
     if (!weeks.length) return [];
 
     const params = await recapParams();
     const stock = await getStock();
-    const lastFinished = current - 7;
+    const lastFinished = weekStartOf(current - 1);
     const rows = weeks.map((m) => {
-      const f = weekFigures(m, data, params);
+      const f = weekFigures(m, data, params, weekBoundsSerial(m).next);
       return [
         weekOfSerial(m), m, f.ca, f.rachat, f.achats, f.cout, f.benefice, f.gestion, f.clan, f.fournisseurs,
         f.citoyennete, f.nourriture, f.final, f.taxe, f.bat,
@@ -120,7 +119,7 @@ export async function lastWeeks(n = 6) {
 let checkedFor = null;
 /** Appelé régulièrement : clôture les semaines terminées au plus une fois par semaine (et au démarrage). */
 export async function weeklyHistory(client) {
-  const current = mondayOf(toSheetSerial());
+  const current = weekStartOf(toSheetSerial());
   if (checkedFor === current) return;
   const added = await closeFinishedWeeks();
   checkedFor = current;

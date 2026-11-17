@@ -1,4 +1,4 @@
-import { env, PRODUCTS, SHEETS, TARIFS, STOCK_LEVELS } from './config.js';
+import { env, PRODUCTS, SHEETS, TARIFS, STOCK_LEVELS, SEMAINE } from './config.js';
 import * as gs from './sheets.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
 import { plafondFormula } from './charbonniers.js';
@@ -35,9 +35,22 @@ const headerRow = (width, cells) => {
 // Ligne de début des données dans "Salaires"
 export const SALAIRES_FIRST_ROW = 5;
 
-/** Formule donnant la semaine (lundi → dimanche) contenant la date `d` : "28/09/2026 au 04/10/2026". */
+// Semaines (mêmes règles que time.js) : du lundi au dimanche avant la transition, semaine de transition
+// du lundi 16 au samedi 21/11/2026, puis du dimanche au samedi. WEEKDAY(d,2) : lundi = 1 ; WEEKDAY(d,1) : dimanche = 1.
+const T0 = `DATE(${SEMAINE.transition.join(',')})`;
+const T1 = `DATE(${SEMAINE.dimanche.join(',')})`;
+
+/** Formule du premier jour de la semaine contenant la date `d`. */
+export const weekStartFormula = (d) =>
+  `IF(INT(${d})<${T0},INT(${d})-WEEKDAY(${d},2)+1,IF(INT(${d})<${T1},${T0},INT(${d})-WEEKDAY(${d},1)+1))`;
+
+/** Formule du dernier jour (inclus) de la semaine contenant la date `d`. */
+export const weekEndFormula = (d) =>
+  `IF(INT(${d})<${T0},INT(${d})-WEEKDAY(${d},2)+7,IF(INT(${d})<${T1},${T1}-1,INT(${d})-WEEKDAY(${d},1)+7))`;
+
+/** Formule donnant la semaine contenant la date `d` : "16/11/2026 au 21/11/2026". */
 export const weekFormula = (d) =>
-  `TEXT(INT(${d})-WEEKDAY(${d},2)+1,"dd/mm/yyyy")&" au "&TEXT(INT(${d})-WEEKDAY(${d},2)+7,"dd/mm/yyyy")`;
+  `TEXT(${weekStartFormula(d)},"dd/mm/yyyy")&" au "&TEXT(${weekEndFormula(d)},"dd/mm/yyyy")`;
 
 /** En-tête de l'onglet Salaires (hors B1, saisi par l'utilisateur). */
 export const salairesHeader = () => ({
@@ -110,7 +123,7 @@ async function ensureContratsColumns() {
 const NOURRITURE_HEADER = ['Date', `Montant (${env.currency})`, 'Note', 'Par', 'Hebdomadaire (OUI)', 'ID'];
 
 export const HISTORIQUE_HEADER = [
-  'Semaine', 'Lundi', 'Chiffre d\'affaires', 'Rachat charbonniers', 'Achats extérieurs', 'Coût matériaux', 'Bénéfice',
+  'Semaine', 'Début de semaine', 'Chiffre d\'affaires', 'Rachat charbonniers', 'Achats extérieurs', 'Coût matériaux', 'Bénéfice',
   'Salaire gestion', 'Salaire clan', 'Charbonniers ayant fourni', 'Citoyenneté', 'Contrat nourriture', 'Bénéfice final',
   'Taxe', 'BAT', ...PRODUCTS.slice(0, 4).map((p) => `Stock ${p.code} (fin de semaine)`), 'Clôturé le',
   ...PRODUCTS.slice(4).map((p) => `Stock ${p.code} (fin de semaine)`),
@@ -254,13 +267,13 @@ async function writeStockFormulas() {
 
 // ---------- Récapitulatif (Feuille 1) ----------
 
-const RECAP_VERSION = '2';
+const RECAP_VERSION = '3';
 const WEEK_RANGE = (col) => `${col},">="&$Z$1,${col},"<"&$Z$2`; // critères SUMIFS « dans la semaine en cours »
 
-// Le récap porte toujours sur la semaine en cours (lundi → dimanche) : Z1 = lundi, Z2 = lundi suivant
+// Le récap porte toujours sur la semaine en cours : Z1 = premier jour, Z2 = premier jour de la semaine suivante
 const RECAP_WEEK = [
-  { range: `${R}!A3:C4`, values: [['Semaine en cours', '=TEXT($Z$1,"dd/mm/yyyy")&" au "&TEXT($Z$1+6,"dd/mm/yyyy")', ''], ['', '', '']] },
-  { range: `${R}!Z1:Z2`, values: [['=INT(TODAY())-WEEKDAY(TODAY(),2)+1'], ['=$Z$1+7']] },
+  { range: `${R}!A3:C4`, values: [['Semaine en cours', '=TEXT($Z$1,"dd/mm/yyyy")&" au "&TEXT($Z$2-1,"dd/mm/yyyy")', ''], ['', '', '']] },
+  { range: `${R}!Z1:Z2`, values: [[`=${weekStartFormula('TODAY()')}`], [`=${weekEndFormula('TODAY()')}+1`]] },
 ];
 
 /**
@@ -303,9 +316,9 @@ async function setupRecap() {
   await loadSettings();
   const version = getSetting('recap_version');
   if (version === RECAP_VERSION) return false;
-  if (version === '1') {
-    // Version 1 : la semaine se choisissait en B3. On passe à « toujours la semaine en cours »
-    // sans toucher au reste (trésorerie, pourcentages).
+  if (version === '1' || version === '2') {
+    // Versions 1 et 2 : on réécrit seulement le calcul de la semaine (v1 : semaine choisie en B3 ;
+    // v2 : semaines du lundi au dimanche), sans toucher au reste (trésorerie, pourcentages).
     await gs.writeMany(RECAP_WEEK, false);
     await setSetting('recap_version', RECAP_VERSION);
     return true;

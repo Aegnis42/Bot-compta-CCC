@@ -2,11 +2,11 @@ import { env } from './config.js';
 import { listContracts, getContract, createContract, setContractWeekly } from './contrats.js';
 import { listFood, recordFood, setFoodWeekly } from './achats.js';
 import { getSetting, setSetting } from './settings.js';
-import { weekLabel } from './time.js';
+import { weekLabel, sameWeek } from './time.js';
 import { UserError } from './utils.js';
 import * as ui from './ui.js';
 
-// Contrats hebdomadaires (ventes de charbon et nourriture) : chaque lundi, une copie est créée pour la
+// Contrats hebdomadaires (ventes de charbon et nourriture) : à chaque nouvelle semaine (dimanche 00h), une copie est créée pour la
 // nouvelle semaine. La marque « OUI » passe sur la copie ; l'original garde « Renouvelé → <nouvel ID> ».
 
 const RENEW_KEY = 'dernier_renouvellement_hebdo';
@@ -63,13 +63,13 @@ export async function renewAll() {
 }
 
 /**
- * Appelé régulièrement : au changement de semaine (lundi 00h), renouvelle les contrats hebdomadaires une
+ * Appelé régulièrement : au changement de semaine (dimanche 00h), renouvelle les contrats hebdomadaires une
  * seule fois (semaine mémorisée dans Config). Au tout premier lancement, ne fait que mémoriser la semaine.
  */
 export async function weeklyRenewal(client) {
   const week = weekLabel();
   const last = getSetting(RENEW_KEY);
-  if (last === week) return;
+  if (sameWeek(last, week)) return;
   await setSetting(RENEW_KEY, week); // noté avant : jamais deux renouvellements pour la même semaine
   if (!last) return;
   const lines = await renewAll();

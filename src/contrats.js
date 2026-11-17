@@ -12,7 +12,7 @@ const L = gs.q(SHEETS.LIVRAISONS);
 
 // Contrats : A ID | B Date | C Client | D Tarif | E-H commandé | I-L livré | M-P reste
 //            | Q Prix client | R Montant livré | S Statut | T Annulé | U Note | V Coût matériaux | W Bénéfice
-//            | X-AA Prix perso par unité (CP, C, BC, CO ; vide = tarif) | AB Hebdomadaire (OUI = renouvelé chaque lundi)
+//            | X-AA Prix perso par unité (CP, C, BC, CO ; vide = tarif) | AB Hebdomadaire (OUI = renouvelé à chaque nouvelle semaine)
 //            | AC Lieu de livraison | AD Client Discord (ID, pour les commandes passées sur Discord)
 function toContract(r, i) {
   return {
