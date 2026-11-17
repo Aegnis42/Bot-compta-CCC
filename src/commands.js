@@ -12,7 +12,7 @@ import { listRecurring, stopRecurring } from './recurrents.js';
 import { lastWeeks } from './historique.js';
 import {
   addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow, depositAndEmbed,
-  resolveForDeletion, setRachatFlow,
+  resolveForDeletion, setRachatFlow, productionSalonsFlow,
 } from './actions.js';
 import { handlePanelInteraction, schedulePanelRefresh, deletionPrompt } from './panel.js';
 import { isStaff } from './access.js';
@@ -62,6 +62,9 @@ export const commandDefs = [
   new SlashCommandBuilder().setName('stock-salons').setDescription('Crée une catégorie privée affichant le stock en salons vocaux (ex : Charbon | 3200)')
     .addStringOption((o) => o.setName('categorie').setDescription('Nom de la catégorie (par défaut : Stock)').setMaxLength(100))
     .addRoleOption((o) => o.setName('role').setDescription('Rôle qui pourra voir le stock (relancer la commande pour en ajouter d\'autres)')),
+
+  new SlashCommandBuilder().setName('production-salons').setDescription('Crée une catégorie publique : ce qu’il faut produire pour les commandes en cours, en direct')
+    .addStringOption((o) => o.setName('categorie').setDescription('Nom de la catégorie (par défaut : À produire)').setMaxLength(100)),
 
   new SlashCommandBuilder().setName('avis-paie').setDescription('Envoyer maintenant à chaque charbonnier son avis de paie (auto : dimanche 17h)')
     .addStringOption(weekOption),
@@ -136,12 +139,12 @@ export const commandDefs = [
 
 // ---------- Helpers ----------
 
-const EPHEMERAL = new Set(['avis-paie', 'salaires', 'setup', 'charbonnier', 'stock-salons']);
+const EPHEMERAL = new Set(['production-salons', 'avis-paie', 'salaires', 'setup', 'charbonnier', 'stock-salons']);
 
 export { isStaff };
 
 // Commandes réservées au staff (vérifiées par le bot avant exécution)
-const STAFF_COMMANDS = new Set(['rachat', 'achat', 'nourriture', 'recurrents', 'historique', 'stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
+const STAFF_COMMANDS = new Set(['production-salons', 'rachat', 'achat', 'nourriture', 'recurrents', 'historique', 'stock-salons', 'avis-paie', 'salaires', 'contrat', 'charbonnier', 'setup']);
 
 /** Prix perso saisis dans la commande : { CP: 0.9, ... } (seulement les options renseignées). */
 function readPrices(i) {
@@ -221,6 +224,10 @@ const handlers = {
     await i.editReply(await stockSalonsFlow({
       guild: i.guild, client: i.client, name: i.options.getString('categorie'), role: i.options.getRole('role'),
     }));
+  },
+
+  async 'production-salons'(i) {
+    await i.editReply(await productionSalonsFlow({ guild: i.guild, client: i.client, name: i.options.getString('categorie') }));
   },
 
   async 'avis-paie'(i) {

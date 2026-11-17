@@ -50,6 +50,10 @@ Les colonnes calculées (Semaine, Montant, Livré, Reste, Statut…) sont des fo
 
 Le salaire d'un charbonnier est plafonné à **600 septimes par semaine** (colonne « Plafond hebdo » de l'onglet Charbonniers, jusqu'à **1000**). Au-delà, le charbon entre dans le stock mais compte comme un **don à l'entreprise** : le bot indique ce qui dépasse au dépôt qui franchit le plafond, puis prévient que les dépôts suivants sont des dons. Réglage : panneau → 👥 ⚙️ Réglages, ou `/charbonnier plafond`.
 
+## Catégorie publique « À produire »
+
+`/production-salons` (ou panneau → 📦 Salons de stock → « À produire (public) ») crée une catégorie **visible de tout le serveur** : un salon vocal par produit (`Charbon | 1200 ⛏️`, `✅` quand rien n'est à produire) et un tableau `⛏️-à-produire` mis à jour en direct. Chiffre affiché = reste à livrer des contrats en cours − stock (colonne « À produire » de l'onglet Stock). Aucun nom de client ni montant n'y apparaît.
+
 ## Blocage du rachat (Briquette, Coke)
 
 `/rachat produit etat` (ou panneau → ⚙️ **Rachat BC / CO**) bloque 🔒 ou débloque 🔓 le rachat de la Briquette et/ou du Coke. Quand c'est bloqué, les dépôts qui en contiennent sont refusés (le reste du dépôt aussi). Le cadenas s'affiche dans les salons vocaux de stock, le tableau en direct, `/stock`, le panneau et les menus de dépôt. État gardé dans l'onglet Config.

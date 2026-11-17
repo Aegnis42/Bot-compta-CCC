@@ -4,7 +4,7 @@ import { UserError } from './utils.js';
 import { ensureStructure } from './setup.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
 import { loadPrices } from './prices.js';
-import { setupStockChannels, scheduleStockRefresh } from './stockChannels.js';
+import { setupStockChannels, setupProductionChannels, scheduleStockRefresh } from './stockChannels.js';
 import { rachatValue } from './prices.js';
 import {
   allCharbonniers, findByUser, addCharbonnier, deactivateCharbonnier, validateName, loadRegistry, rebuildFormulas,
@@ -191,6 +191,17 @@ export async function stockSalonsFlow({ guild, client, name, role }) {
   if (role) lines.push(`👁️ Le rôle ${role} peut voir le stock.`);
   lines.push('Seuls les rôles autorisés (et les admins) voient la catégorie.');
   return lines.join('\n');
+}
+
+/** Crée/complète la catégorie publique « À produire » (tableau en direct + un salon vocal par produit). */
+export async function productionSalonsFlow({ guild, client, name }) {
+  const { cat, created } = await setupProductionChannels(guild, client.user.id, name?.trim() || 'À produire').catch((e) => {
+    throw e instanceof UserError ? e : new UserError(`Impossible de créer les salons (permission « Gérer les salons » / « Gérer les rôles » ?) : ${e.message}`);
+  });
+  return [
+    created.length ? `✅ Créé : ${created.join(', ')}.` : `✅ Catégorie **${cat.name}** déjà en place.`,
+    '👁️ Visible par tout le serveur : ce qu’il reste à produire pour honorer les commandes en cours, mis à jour en direct.',
+  ].join('\n');
 }
 
 /**

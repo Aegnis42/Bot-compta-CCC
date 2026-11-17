@@ -84,6 +84,32 @@ export function stockEmbed(stock) {
     .setFooter({ text: `Niveaux (${STOCK_LEVELS.codes.join(', ')}) : ${legend}` }).setTimestamp();
 }
 
+/**
+ * Tableau public « À produire » : pour chaque produit, ce qu'il manque pour honorer les commandes en cours
+ * (reste à livrer − stock). Uniquement des quantités : ni clients ni montants.
+ */
+export function productionEmbed(stock, openCount) {
+  const lines = PRODUCTS.map((p) => {
+    const s = stock[p.code] ?? {};
+    const n = Math.max(0, s.aProduire ?? 0);
+    const detail = s.reste > 0 ? ` · ${fmt(s.reste)} à livrer, ${fmt(Math.max(0, s.stock ?? 0))} en stock` : '';
+    return n > 0 ? `⛏️ **${p.name}** : **${fmt(n)}** à produire${detail}` : `✅ **${p.name}** : rien à produire${detail}`;
+  });
+  const total = PRODUCTS.reduce((sum, p) => sum + Math.max(0, stock[p.code]?.aProduire ?? 0), 0);
+  return new EmbedBuilder()
+    .setColor(total > 0 ? COLORS.warn : COLORS.ok)
+    .setTitle('⛏️ À produire pour les commandes en cours')
+    .setDescription([
+      ...lines,
+      '',
+      total > 0
+        ? '_Chaque dépôt fait baisser ces chiffres. Merci à tous les charbonniers !_'
+        : '_Le stock couvre toutes les commandes en cours. 🎉_',
+    ].join('\n'))
+    .setFooter({ text: `${openCount} commande(s) en cours · mis à jour en direct` })
+    .setTimestamp();
+}
+
 export function contractsSummaryEmbed(open) {
   const lines = open.slice(0, 20).map((ct) => {
     const reste = Object.fromEntries(PRODUCTS.map((p) => [p.code, Math.max(0, ct.reste[p.code])]));

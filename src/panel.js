@@ -25,7 +25,7 @@ import { lastWeeks } from './historique.js';
 import { sendPayNotices } from './sync.js';
 import {
   addCharbonnierFlow, removeCharbonnierFlow, charbonniersList, setupFlow, stockSalonsFlow, depositAndEmbed,
-  resolveForDeletion, deletionPreview, deleteCharbonnierFlow, setRachatFlow,
+  resolveForDeletion, deletionPreview, deleteCharbonnierFlow, setRachatFlow, productionSalonsFlow,
 } from './actions.js';
 import * as ui from './ui.js';
 
@@ -300,8 +300,12 @@ const MODALS = {
   'set-cat': () => modal('set-cat', 'Catégorie des salons charbonniers',
     text('nom', 'Nom de la catégorie', { placeholder: 'ex : ⛏️ Charbonniers', max: 100 }),
   ),
-  'set-stock': () => modal('set-stock', 'Salons de stock',
-    text('nom', 'Nom de la catégorie', { value: 'Stock', max: 100 }),
+  'set-stock': () => modal('set-stock', 'Salons de stock et de production',
+    choice('type', 'Quelle catégorie ?', [
+      { label: 'Stock (privé)', value: 'stock', emoji: '📦', description: 'Stock actuel, visible des rôles choisis', default: true },
+      { label: 'À produire (public)', value: 'production', emoji: '⛏️', description: 'Ce qu’il faut produire pour les commandes, visible de tous' },
+    ]),
+    text('nom', 'Nom de la catégorie (optionnel)', { placeholder: 'Stock / À produire', required: false, max: 100 }),
     (l) => l.setLabel('Rôle qui peut voir le stock (optionnel)').setRoleSelectMenuComponent((s) => s.setCustomId('role').setRequired(false)),
   ),
 };
@@ -468,11 +472,15 @@ const SUBMITS = {
   },
 
   async 'set-stock'(i) {
+    const name = i.fields.getTextInputValue('nom').trim();
+    if (selected(i, 'type') === 'production') {
+      return { content: await productionSalonsFlow({ guild: i.guild, client: i.client, name }) };
+    }
     let role = null;
     try {
       role = i.fields.getSelectedRoles('role')?.first() ?? null;
     } catch { /* aucun rôle choisi */ }
-    return { content: await stockSalonsFlow({ guild: i.guild, client: i.client, name: i.fields.getTextInputValue('nom'), role }) };
+    return { content: await stockSalonsFlow({ guild: i.guild, client: i.client, name, role }) };
   },
 };
 
