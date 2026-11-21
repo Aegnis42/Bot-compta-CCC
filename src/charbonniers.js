@@ -35,8 +35,12 @@ export function validateName(name) {
 }
 
 /** Relit l'onglet "Charbonniers". */
+let loadSeq = 0;
 export async function loadRegistry() {
+  const seq = ++loadSeq;
   const rows = await gs.read(`${gs.q(SHEETS.CHARBONNIERS)}!A2:I`, { unformatted: true });
+  // Une lecture plus récente a déjà été lancée (ex. après une suppression) : on ne l'écrase pas avec celle-ci
+  if (seq !== loadSeq) return registry;
   registry = rows
     .map((r, i) => ({
       name: String(r[0] ?? '').trim(),
@@ -169,9 +173,20 @@ export function addCharbonnier({ name, discordId, channelId }) {
   });
 }
 
+/**
+ * Numéro de ligne À JOUR d'un charbonnier (à appeler sous le verrou) : le registre en mémoire peut dater
+ * d'avant une suppression qui a décalé les lignes. On relit l'onglet et on retrouve la ligne par nom + compte Discord.
+ */
+async function freshRow(c) {
+  await loadRegistry();
+  const fresh = registry.find((x) => x.name === c.name && x.discordId === c.discordId);
+  if (!fresh) throw new UserError(`**${c.name}** n'est plus dans l'onglet Charbonniers (déjà supprimé ?).`);
+  return fresh.row;
+}
+
 export function deactivateCharbonnier(c) {
   return gs.withLock(async () => {
-    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!E${c.row}`, [['NON']]);
+    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!E${await freshRow(c)}`, [['NON']]);
     await loadRegistry();
     await rebuildFormulas();
   });
@@ -204,6 +219,7 @@ export async function tabTotals(c) {
  */
 export function deleteCharbonnier(c) {
   return gs.withLock(async () => {
+    const row = await freshRow(c); // jamais une ligne décalée : on supprimerait un autre charbonnier
     const totals = await tabTotals(c);
     const St = gs.q(SHEETS.STOCK);
     if (PRODUCTS.some((p) => totals.qty[p.code])) {
@@ -217,7 +233,7 @@ export function deleteCharbonnier(c) {
       requests.push({ deleteSheet: { sheetId: meta.sheets.get(c.tab).sheetId } });
     }
     const reg = meta.sheets.get(SHEETS.CHARBONNIERS);
-    requests.push({ deleteDimension: { range: { sheetId: reg.sheetId, dimension: 'ROWS', startIndex: c.row - 1, endIndex: c.row } } });
+    requests.push({ deleteDimension: { range: { sheetId: reg.sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } } });
     await gs.batchUpdate(requests);
     await gs.getMeta(true);
     await loadRegistry();
@@ -269,7 +285,7 @@ export function setPlafond(c, value) {
   const v = Math.round(Number(value));
   if (!(v >= 0) || v > PLAFOND.max) throw new UserError(`Plafond invalide : il doit être entre 0 et ${PLAFOND.max} ${env.currency}.`);
   return gs.withLock(async () => {
-    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!I${c.row}`, [[v]]);
+    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!I${await freshRow(c)}`, [[v]]);
     await loadRegistry();
     await rebuildFormulas();
   });
@@ -302,7 +318,7 @@ export function plafondNotice(weekSum, added) {
 /** Payer ou non la citoyenneté à un charbonnier quand il fournit du charbon. */
 export function setCitizenship(c, payer) {
   return gs.withLock(async () => {
-    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!H${c.row}`, [[payer ? 'OUI' : 'NON']]);
+    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!H${await freshRow(c)}`, [[payer ? 'OUI' : 'NON']]);
     await loadRegistry();
     await rebuildFormulas();
   });

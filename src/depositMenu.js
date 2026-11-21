@@ -7,7 +7,7 @@ import { UserError, emptyQty, hasQty } from './utils.js';
 import { getPrices } from './prices.js';
 import { isBlocked } from './rachat.js';
 import { weekLabel } from './time.js';
-import { activeCharbonniers, findByChannel, deleteDeposit, weekSummary } from './charbonniers.js';
+import { activeCharbonniers, findByChannel, findByUser, deleteDeposit, weekSummary } from './charbonniers.js';
 import { depositAndEmbed } from './actions.js';
 import { scheduleStockRefresh } from './stockChannels.js';
 import * as ui from './ui.js';
@@ -122,7 +122,13 @@ export async function handleDepositMenu(i) {
   const reply = (payload) => (i.deferred || i.replied ? i.editReply(payload) : i.reply({ ...payload, ...EPH }));
   try {
     const c = findByChannel(i.channelId);
-    if (!c) throw new UserError('Ce salon n\'est relié à aucun charbonnier actif.');
+    if (!c) {
+      // Ancien salon (charbonnier réajouté avec un nouveau salon, ou retiré) : on indique le bon salon
+      const current = findByUser(i.user.id);
+      throw new UserError(current?.channelId
+        ? `Ce salon n'est plus utilisé pour les dépôts. Ton salon actuel est <#${current.channelId}>.`
+        : 'Ce salon n\'est relié à aucun charbonnier actif. Demande au staff de vérifier ton inscription.');
+    }
     if (i.user.id !== c.discordId && !isStaff(i.member)) throw new UserError(`Ce menu est réservé à **${c.name}**.`);
 
     if (i.isButton() && id === 'dm:depot') {
