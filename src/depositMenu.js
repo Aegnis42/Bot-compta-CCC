@@ -7,7 +7,7 @@ import { UserError, emptyQty, hasQty } from './utils.js';
 import { getPrices } from './prices.js';
 import { isBlocked } from './rachat.js';
 import { weekLabel } from './time.js';
-import { activeCharbonniers, findByChannel, findByUser, deleteDeposit, weekSummary } from './charbonniers.js';
+import { activeCharbonniers, findByChannel, findByUser, deleteDeposit, lastDiscordDeposit, weekSummary } from './charbonniers.js';
 import { depositAndEmbed } from './actions.js';
 import { scheduleStockRefresh } from './stockChannels.js';
 import * as ui from './ui.js';
@@ -146,14 +146,19 @@ export async function handleDepositMenu(i) {
       const week = weekLabel();
       await i.editReply({ embeds: [ui.recapEmbed(c, week, await weekSummary(c, week))] });
     } else if (i.isButton() && id === 'dm:annuler') {
-      await i.reply({
-        content: 'Annuler ton **dernier dépôt** fait sur Discord ?',
-        components: [new ActionRowBuilder().setComponents(button('dm:annuler-ok', 'Oui, annuler', '↩️', ButtonStyle.Danger))],
-        ...EPH,
+      // Le bouton de confirmation vise CE dépôt (sa référence), jamais « le dernier » au moment du clic
+      await i.deferReply(EPH);
+      const last = await lastDiscordDeposit(c);
+      if (!last) throw new UserError('Aucun dépôt fait via Discord à annuler.');
+      await i.editReply({
+        content: `Annuler ce dépôt ?\n**${ui.qtyInline(last.qty)}** (${ui.money(last.montant)}) · semaine du ${last.week} · réf ${last.ref}`,
+        components: [new ActionRowBuilder().setComponents(button(`dm:annuler-ok:${last.ref}`, 'Oui, annuler ce dépôt', '↩️', ButtonStyle.Danger))],
       });
-    } else if (i.isButton() && id === 'dm:annuler-ok') {
+    } else if (i.isButton() && id.startsWith('dm:annuler-ok')) {
+      const ref = id.split(':')[2];
+      if (!ref) throw new UserError('Ce bouton est périmé : clique de nouveau sur « Annuler mon dernier dépôt ».');
       await i.deferUpdate();
-      const d = await deleteDeposit(c, null);
+      const d = await deleteDeposit(c, ref);
       scheduleStockRefresh();
       await i.editReply({ content: '✅ Dépôt annulé.', components: [] });
       await i.channel.send({

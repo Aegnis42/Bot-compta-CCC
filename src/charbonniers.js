@@ -368,10 +368,18 @@ export function deleteDeposit(c, ref) {
       : rows.findLastIndex((r) => r[IDX.source] === 'Discord' && r[IDX.ref]);
     if (idx === -1) throw new UserError(ref ? `Aucun dépôt avec la réf **${ref}**.` : 'Aucun dépôt fait via Discord à annuler.');
     const r = rows[idx];
-    const { sheetId } = await gs.sheetProps(c.tab);
-    await gs.batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: idx + 1, endIndex: idx + 2 } } }]);
+    // On vide les cellules du dépôt au lieu de supprimer la ligne : rien ne se décale, et si Google répond trop
+    // tard et que l'opération est relancée, la référence n'existe plus → rien d'autre n'est effacé.
+    await gs.clear(`${gs.q(c.tab)}!A${idx + 2}:${TAB_LAST}${idx + 2}`);
     return { ref: r[IDX.ref], qty: qtyAt(r, 'depot'), week: r[IDX.week], montant: num(r[IDX.montant]) };
   });
+}
+
+/** Dernier dépôt fait via Discord (pour proposer de l'annuler), ou null. */
+export async function lastDiscordDeposit(c) {
+  const rows = await gs.read(tabRange(c), { unformatted: true });
+  const r = rows.findLast((x) => x[IDX.source] === 'Discord' && x[IDX.ref]);
+  return r ? { ref: String(r[IDX.ref]), qty: qtyAt(r, 'depot'), week: r[IDX.week], montant: num(r[IDX.montant]) } : null;
 }
 
 export function summarize(rows, week) {
