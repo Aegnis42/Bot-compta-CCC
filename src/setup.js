@@ -1,4 +1,5 @@
 import { env, PRODUCTS, SHEETS, TARIFS, STOCK_LEVELS, SEMAINE } from './config.js';
+import { createHash } from 'node:crypto';
 import * as gs from './sheets.js';
 import { loadSettings, getSetting, setSetting } from './settings.js';
 import { plafondFormula } from './charbonniers.js';
@@ -384,7 +385,7 @@ async function setupRecap() {
  * Crée les onglets manquants puis met à jour les en-têtes et formules automatiques.
  * Les données et les cases de saisie existantes ne sont jamais écrasées. Renvoie la liste des onglets créés.
  */
-export async function ensureStructure() {
+export async function ensureStructure({ force = false } = {}) {
   const meta = await gs.getMeta(true);
   const order = [
     SHEETS.PRIX, SHEETS.CHARBONNIERS, SHEETS.SALAIRES, SHEETS.STOCK, SHEETS.CONTRATS, SHEETS.LIVRAISONS,
@@ -407,7 +408,16 @@ export async function ensureStructure() {
     await gs.batchUpdate(formats);
   }
 
-  // Mises à jour des formules automatiques (ajoutent les nouvelles colonnes aux Sheets existants)
+  // Mises à jour des formules automatiques (ajoutent les nouvelles colonnes aux Sheets existants).
+  // Chaque réécriture force Google à recalculer de grosses formules : on ne le fait que si la structure a changé
+  // depuis la dernière fois (empreinte gardée dans Config), si des onglets viennent d'être créés, ou sur demande (/setup).
+  await loadSettings();
+  const empreinte = createHash('sha1').update(JSON.stringify([
+    contratsHeader(), livraisonsHeader(), achatsHeader(), HISTORIQUE_HEADER, NOURRITURE_HEADER, recapStockRows(),
+    PRODUCTS, CONTRATS_COLUMNS, RECAP_VERSION,
+  ])).digest('hex').slice(0, 16);
+  if (!force && !missing.length && getSetting('structure_empreinte') === empreinte) return missing;
+
   await ensureContratsColumns();
   await ensurePrixRows();
   await gs.write(`${C}!A1:${CONTRATS_LAST}1`, [contratsHeader()], false);
@@ -419,5 +429,6 @@ export async function ensureStructure() {
   await setupRecap();
   // Bloc stock du récap réécrit à chaque fois (pas de saisie dedans) : suit les paliers de STOCK_LEVELS
   await gs.write(`${R}!A8:E${7 + PRODUCTS.length}`, recapStockRows(), false);
+  await setSetting('structure_empreinte', empreinte);
   return missing;
 }
