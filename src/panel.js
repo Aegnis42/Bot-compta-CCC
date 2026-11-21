@@ -15,7 +15,7 @@ import {
   listContracts, getStock, createContract, deliverContract, cancelContract, setContractPrices, isOpen,
 } from './contrats.js';
 import {
-  activeCharbonniers, findByUser, findAny, setCitizenship, setPlafond, salariesForWeek,
+  activeCharbonniers, findByUser, findAny, setCitizenship, setPlafond, salariesForWeek, charbonnierActivity, deactivateCharbonnier,
 } from './charbonniers.js';
 import { bumpDepositMenu } from './depositMenu.js';
 import { lockIcon, isBlocked, setBlocked, BLOCKABLE, blockSummary } from './rachat.js';
@@ -508,10 +508,6 @@ const VIEWS = {
     };
   },
 
-  async 'ch-liste'() {
-    return { embeds: [new EmbedBuilder().setColor(ui.COLORS.coal).setTitle(`👥 Charbonniers (${activeCharbonniers().length} actifs)`).setDescription(charbonniersList().slice(0, 4096))] };
-  },
-
   async sal() {
     const week = weekLabel();
     return {
@@ -546,6 +542,101 @@ const VIEWS = {
     return { content: await setupFlow({ guild: i.guild, client: i.client }) };
   },
 };
+
+// ---------- Liste détaillée des charbonniers ----------
+// Pour chacun : depuis combien de jours il est là, depuis combien de jours il n'a rien fourni, et un bouton
+// pour le retirer ou le supprimer. Du plus inactif au plus actif, 10 par page (limite de 40 composants Discord).
+
+const PAGE = 10;
+let activityCache = { at: 0, list: [] };
+async function activity(force = false) {
+  if (force || Date.now() - activityCache.at > 2 * 60 * 1000) activityCache = { at: Date.now(), list: await charbonnierActivity() };
+  return activityCache.list;
+}
+const keyOf = (c) => c.discordId || `n:${c.name}`;
+const findByKey = (key) => (key.startsWith('n:') ? findAny({ name: key.slice(2) }) : findAny({ userId: key }));
+const days = (n) => (n === null ? '?' : n === 0 ? 'aujourd’hui' : `${n} j`);
+const dayMonth = (serial) => {
+  const d = new Date(Math.round((serial - 25569) * 86400000));
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
+function activityView(list, page) {
+  const pages = Math.max(1, Math.ceil(list.length / PAGE));
+  const p = Math.min(Math.max(0, page), pages - 1);
+  const actifs = list.filter((a) => a.c.actif).length;
+  const container = new ContainerBuilder()
+    .setAccentColor(0x2c2f33)
+    .addTextDisplayComponents((t) => t.setContent(
+      `## 👥 Charbonniers · ${actifs} actifs sur ${list.length}
+-# Du plus inactif au plus actif · page ${p + 1}/${pages} · 🔴 rien depuis 21 j ou plus · 🟠 7 j ou plus · 🟢 moins de 7 j`,
+    ))
+    .addSeparatorComponents((sep) => sep.setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+  for (const a of list.slice(p * PAGE, (p + 1) * PAGE)) {
+    const level = a.daysIdle === null ? '⚪' : a.daysIdle >= 21 ? '🔴' : a.daysIdle >= 7 ? '🟠' : '🟢';
+    const idle = a.count
+      ? `rien fourni depuis **${days(a.daysIdle)}**`
+      : `**n'a jamais rien fourni**`;
+    const text = [
+      `${level} **${a.c.name}**${a.c.actif ? '' : ' _(retiré)_'}${a.c.discordId ? ` · <@${a.c.discordId}>` : ''}`,
+      `-# Là depuis ${days(a.daysHere)}${a.addedAt ? ` (${dayMonth(a.addedAt)})` : ''} · ${idle} · ${a.count} dépôt(s)`,
+    ].join('\n');
+    container.addSectionComponents((sec) => sec
+      .addTextDisplayComponents((t) => t.setContent(text))
+      .setButtonAccessory(btn(`chg:${keyOf(a.c)}`, 'Retirer / supprimer', '⚙️')));
+  }
+  container.addActionRowComponents((row) => row.setComponents(
+    btn(`chl:${p - 1}`, 'Précédente', '◀️').setDisabled(p === 0),
+    btn(`chl:${p + 1}`, 'Suivante', '▶️').setDisabled(p >= pages - 1),
+    btn(`chl:${p}:r`, 'Actualiser', '♻️'),
+  ));
+  return { components: [container], flags: MessageFlags.IsComponentsV2 };
+}
+
+/** Boutons de la liste détaillée. Renvoie true si l'action a été traitée. */
+async function handleActivityList(i, action) {
+  if (action === 'ch-liste') {
+    await i.deferReply(EPH);
+    await i.editReply(activityView(await activity(true), 0));
+    return true;
+  }
+  if (action.startsWith('chl:')) {
+    const [, page, refresh] = action.split(':');
+    await i.deferUpdate();
+    await i.editReply(activityView(await activity(refresh === 'r'), Number(page) || 0));
+    return true;
+  }
+  const [kind, ...rest] = action.split(':');
+  if (!['chg', 'chr', 'chs'].includes(kind)) return false;
+  const key = rest.join(':');
+  const c = findByKey(key);
+  if (!c) throw new UserError('Ce charbonnier n’existe plus (déjà supprimé ?).');
+  if (kind === 'chg') {
+    const a = (await activity()).find((x) => x.c === c);
+    await i.reply({
+      content: `⚙️ **${c.name}**${c.actif ? '' : ' _(déjà retiré)_'}${a ? ` · là depuis ${days(a.daysHere)} · ${a.count ? `rien fourni depuis ${days(a.daysIdle)}` : 'n’a jamais rien fourni'}` : ''}
+`
+        + '-# **Retirer** : il est désactivé, son salon et son historique sont gardés (réversible). **Supprimer** : salon, onglet et ligne du Sheet sont effacés (irréversible, avec confirmation).',
+      components: [new ActionRowBuilder().setComponents(
+        btn(`chr:${key}`, 'Retirer', '➖').setDisabled(!c.actif),
+        btn(`chs:${key}`, 'Supprimer définitivement', '🗑️', ButtonStyle.Danger),
+      )],
+      ...EPH,
+    });
+    return true;
+  }
+  await i.deferUpdate();
+  if (kind === 'chr') {
+    await deactivateCharbonnier(c);
+    activityCache.at = 0;
+    await i.editReply({ content: `➖ **${c.name}** est retiré. Son salon et son historique sont conservés ; pour le réactiver, ajoute-le à nouveau avec ➕ Ajouter.`, components: [] });
+    schedulePanelRefresh();
+  } else {
+    activityCache.at = 0;
+    await i.editReply(await deletionPrompt(i.guild, c)); // récapitulatif + bouton rouge de confirmation
+  }
+  return true;
+}
 
 async function reply(i, payload) {
   const body = { content: '', embeds: [], components: [], ...payload };
@@ -584,6 +675,7 @@ export async function handlePanelInteraction(i) {
       await refreshPanel(i.client, { force: true });
       return true;
     }
+    if (await handleActivityList(i, action)) return true;
     if (action.startsWith('ch-supp-ok:')) {
       const key = action.slice('ch-supp-ok:'.length);
       await i.deferUpdate();
@@ -612,4 +704,4 @@ export async function handlePanelInteraction(i) {
 }
 
 // Pour les tests (validation hors ligne des formulaires et du panneau)
-export const __test = { buildPanel, MODALS, setOpenContracts: (list) => { openContracts = list; } };
+export const __test = { buildPanel, MODALS, activityView, setOpenContracts: (list) => { openContracts = list; } };

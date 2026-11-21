@@ -52,6 +52,7 @@ export async function loadRegistry() {
       // Plafond de salaire hebdomadaire (vide = PLAFOND.base, jamais plus que PLAFOND.max)
       plafond: r[8] === undefined || r[8] === '' ? PLAFOND.base : Math.min(Math.max(0, num(r[8])), PLAFOND.max),
       plafondSet: r[8] !== undefined && r[8] !== '',
+      addedAt: typeof r[5] === 'number' ? r[5] : null, // « Ajouté le » (numéro de série Sheets)
       row: i + 2,
     }))
     .filter((c) => c.name);
@@ -386,4 +387,31 @@ export async function salariesForWeek(week) {
   return tabs
     .map(({ c, rows }) => ({ c, ...withPlafond(summarize(rows, week), c) }))
     .filter((s) => s.c.actif || s.count > 0);
+}
+
+/**
+ * Activité de chaque charbonnier (actifs et inactifs), du plus inactif au plus actif :
+ * depuis combien de jours il est enregistré, et depuis combien de jours il n'a rien fourni
+ * (depuis son dernier dépôt, ou depuis son arrivée s'il n'a jamais rien déposé).
+ */
+export async function charbonnierActivity(now = toSheetSerial()) {
+  const tabs = await readTabs(registry);
+  const rowsOf = new Map(tabs.map(({ c, rows }) => [c, rows]));
+  return registry
+    .map((c) => {
+      const dates = (rowsOf.get(c) ?? [])
+        .filter((r) => typeof r[IDX.date] === 'number' && PRODUCTS.some((p) => qtyAt(r, 'depot')[p.code]))
+        .map((r) => r[IDX.date]);
+      const lastAt = dates.length ? Math.max(...dates) : null;
+      const since = lastAt ?? c.addedAt;
+      return {
+        c,
+        count: dates.length,
+        addedAt: c.addedAt,
+        lastAt,
+        daysHere: c.addedAt === null ? null : Math.floor(now - c.addedAt),
+        daysIdle: since === null ? null : Math.floor(now - since),
+      };
+    })
+    .sort((a, b) => (b.daysIdle ?? -1) - (a.daysIdle ?? -1));
 }
