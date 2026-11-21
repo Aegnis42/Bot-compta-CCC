@@ -71,16 +71,29 @@ client.on(Events.MessageCreate, async (msg) => {
     }
     return;
   }
+  // ⏳ tout de suite : le charbonnier voit que son dépôt est pris en compte (l'écriture dans le Sheet peut prendre
+  // quelques secondes) et ne le renvoie pas une seconde fois.
+  await msg.react('⏳').catch(() => {});
+  const doneWaiting = () => msg.reactions.cache.get('⏳')?.users.remove(client.user.id).catch(() => {});
+  // Répond au message ; s'il a été supprimé entre-temps, la réponse est postée normalement dans le salon
+  const answer = (payload) => msg.reply({ ...payload, allowedMentions: { repliedUser: false }, failIfNotExists: false })
+    .catch((e) => console.warn(`[message] réponse impossible dans le salon de ${c.name} :`, e.message));
+
+  let embed;
   try {
-    const embed = await depositAndEmbed(c, qty, `${msg.author.username} : ${msg.content}`);
-    await msg.react('✅').catch(() => {});
-    await msg.reply({ embeds: [embed], allowedMentions: { repliedUser: false } });
-    bumpDepositMenu(client, c);
+    embed = await depositAndEmbed(c, qty, `${msg.author.username} : ${msg.content}`);
   } catch (e) {
     if (!(e instanceof UserError)) console.error('[message]', e);
+    await doneWaiting();
     await msg.react(e instanceof UserError ? '🔒' : '❌').catch(() => {});
-    await msg.reply({ embeds: [ui.errorEmbed(e instanceof UserError ? e.message : `Dépôt non enregistré : ${e.message}`)] }).catch(() => {});
+    await answer({ embeds: [ui.errorEmbed(e instanceof UserError ? e.message : `Dépôt non enregistré : ${e.message}`)] });
+    return;
   }
+  // Dépôt enregistré : un problème d'affichage ne doit plus être présenté comme un échec du dépôt
+  await doneWaiting();
+  await msg.react('✅').catch(() => {});
+  await answer({ embeds: [embed] });
+  bumpDepositMenu(client, c);
 });
 
 client.on(Events.InteractionCreate, handleInteraction);
