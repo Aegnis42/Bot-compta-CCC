@@ -76,7 +76,7 @@ Dans le salon `PANEL_CHANNEL_ID` (par défaut `1560869948589351012`), le bot aff
 
 - **📜 Contrats** : nouveau (client, tarif, quantités, prix perso, hebdomadaire), livrer, prix perso, en cours, annuler
 - **🛒 Achats & dépenses** : achat extérieur, contrat nourriture, contrats hebdomadaires (arrêt)
-- **👥 Charbonniers** : ajouter, déclarer un dépôt pour quelqu'un, réglages (citoyenneté, plafond), **liste détaillée** (depuis combien de jours chacun est là et n'a rien fourni, du plus inactif au plus actif, avec un bouton ⚙️ pour le retirer ou le supprimer), retirer, supprimer
+- **👥 Charbonniers** : ajouter, déclarer un dépôt pour quelqu'un, citoyenneté, liste, retirer
 - **💰 Paie & finances** : salaires (semaine en cours / dernière), historique, envoi des avis de paie
 - **⚙️ Réglages** : catégorie des salons charbonniers, salons de stock, mise à jour du Sheet, actualiser
 

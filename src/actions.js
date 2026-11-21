@@ -147,7 +147,7 @@ export function charbonniersList() {
 
 /** Met à jour le Sheet et, si `categoryName` est donné, crée/règle la catégorie des salons charbonniers. */
 export async function setupFlow({ guild, client, categoryName }) {
-  const created = await ensureStructure({ force: true });
+  const created = await ensureStructure();
   await loadRegistry();
   await loadPrices();
   await rebuildFormulas();

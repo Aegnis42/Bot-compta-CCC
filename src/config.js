@@ -1,4 +1,4 @@
- import 'dotenv/config';
+import 'dotenv/config';
 
 // Valeur nettoyée : espaces, retours à la ligne et guillemets collés par erreur (ex. dans Railway)
 const clean = (v) => String(v ?? '').trim().replace(/^(["'])(.*)\1$/, '$2').trim();

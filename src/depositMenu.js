@@ -7,7 +7,7 @@ import { UserError, emptyQty, hasQty } from './utils.js';
 import { getPrices } from './prices.js';
 import { isBlocked } from './rachat.js';
 import { weekLabel } from './time.js';
-import { activeCharbonniers, findByChannel, findByUser, deleteDeposit, lastDiscordDeposit, weekSummary } from './charbonniers.js';
+import { activeCharbonniers, findByChannel, deleteDeposit, weekSummary } from './charbonniers.js';
 import { depositAndEmbed } from './actions.js';
 import { scheduleStockRefresh } from './stockChannels.js';
 import * as ui from './ui.js';
@@ -122,13 +122,7 @@ export async function handleDepositMenu(i) {
   const reply = (payload) => (i.deferred || i.replied ? i.editReply(payload) : i.reply({ ...payload, ...EPH }));
   try {
     const c = findByChannel(i.channelId);
-    if (!c) {
-      // Ancien salon (charbonnier réajouté avec un nouveau salon, ou retiré) : on indique le bon salon
-      const current = findByUser(i.user.id);
-      throw new UserError(current?.channelId
-        ? `Ce salon n'est plus utilisé pour les dépôts. Ton salon actuel est <#${current.channelId}>.`
-        : 'Ce salon n\'est relié à aucun charbonnier actif. Demande au staff de vérifier ton inscription.');
-    }
+    if (!c) throw new UserError('Ce salon n\'est relié à aucun charbonnier actif.');
     if (i.user.id !== c.discordId && !isStaff(i.member)) throw new UserError(`Ce menu est réservé à **${c.name}**.`);
 
     if (i.isButton() && id === 'dm:depot') {
@@ -146,19 +140,14 @@ export async function handleDepositMenu(i) {
       const week = weekLabel();
       await i.editReply({ embeds: [ui.recapEmbed(c, week, await weekSummary(c, week))] });
     } else if (i.isButton() && id === 'dm:annuler') {
-      // Le bouton de confirmation vise CE dépôt (sa référence), jamais « le dernier » au moment du clic
-      await i.deferReply(EPH);
-      const last = await lastDiscordDeposit(c);
-      if (!last) throw new UserError('Aucun dépôt fait via Discord à annuler.');
-      await i.editReply({
-        content: `Annuler ce dépôt ?\n**${ui.qtyInline(last.qty)}** (${ui.money(last.montant)}) · semaine du ${last.week} · réf ${last.ref}`,
-        components: [new ActionRowBuilder().setComponents(button(`dm:annuler-ok:${last.ref}`, 'Oui, annuler ce dépôt', '↩️', ButtonStyle.Danger))],
+      await i.reply({
+        content: 'Annuler ton **dernier dépôt** fait sur Discord ?',
+        components: [new ActionRowBuilder().setComponents(button('dm:annuler-ok', 'Oui, annuler', '↩️', ButtonStyle.Danger))],
+        ...EPH,
       });
-    } else if (i.isButton() && id.startsWith('dm:annuler-ok')) {
-      const ref = id.split(':')[2];
-      if (!ref) throw new UserError('Ce bouton est périmé : clique de nouveau sur « Annuler mon dernier dépôt ».');
+    } else if (i.isButton() && id === 'dm:annuler-ok') {
       await i.deferUpdate();
-      const d = await deleteDeposit(c, ref);
+      const d = await deleteDeposit(c, null);
       scheduleStockRefresh();
       await i.editReply({ content: '✅ Dépôt annulé.', components: [] });
       await i.channel.send({

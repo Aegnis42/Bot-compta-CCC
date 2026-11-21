@@ -4,7 +4,7 @@ import { loadRegistry, rebuildFormulas } from './charbonniers.js';
 import { setupHint } from './sheets.js';
 
 try {
-  const created = await ensureStructure({ force: true });
+  const created = await ensureStructure();
   await loadRegistry();
   await rebuildFormulas();
   console.log(created.length ? `✅ Onglets créés : ${created.join(', ')}` : '✅ Structure déjà en place, formules mises à jour.');

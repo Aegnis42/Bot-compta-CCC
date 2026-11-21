@@ -35,12 +35,8 @@ export function validateName(name) {
 }
 
 /** Relit l'onglet "Charbonniers". */
-let loadSeq = 0;
 export async function loadRegistry() {
-  const seq = ++loadSeq;
   const rows = await gs.read(`${gs.q(SHEETS.CHARBONNIERS)}!A2:I`, { unformatted: true });
-  // Une lecture plus récente a déjà été lancée (ex. après une suppression) : on ne l'écrase pas avec celle-ci
-  if (seq !== loadSeq) return registry;
   registry = rows
     .map((r, i) => ({
       name: String(r[0] ?? '').trim(),
@@ -56,7 +52,6 @@ export async function loadRegistry() {
       // Plafond de salaire hebdomadaire (vide = PLAFOND.base, jamais plus que PLAFOND.max)
       plafond: r[8] === undefined || r[8] === '' ? PLAFOND.base : Math.min(Math.max(0, num(r[8])), PLAFOND.max),
       plafondSet: r[8] !== undefined && r[8] !== '',
-      addedAt: typeof r[5] === 'number' ? r[5] : null, // « Ajouté le » (numéro de série Sheets)
       row: i + 2,
     }))
     .filter((c) => c.name);
@@ -173,20 +168,9 @@ export function addCharbonnier({ name, discordId, channelId }) {
   });
 }
 
-/**
- * Numéro de ligne À JOUR d'un charbonnier (à appeler sous le verrou) : le registre en mémoire peut dater
- * d'avant une suppression qui a décalé les lignes. On relit l'onglet et on retrouve la ligne par nom + compte Discord.
- */
-async function freshRow(c) {
-  await loadRegistry();
-  const fresh = registry.find((x) => x.name === c.name && x.discordId === c.discordId);
-  if (!fresh) throw new UserError(`**${c.name}** n'est plus dans l'onglet Charbonniers (déjà supprimé ?).`);
-  return fresh.row;
-}
-
 export function deactivateCharbonnier(c) {
   return gs.withLock(async () => {
-    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!E${await freshRow(c)}`, [['NON']]);
+    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!E${c.row}`, [['NON']]);
     await loadRegistry();
     await rebuildFormulas();
   });
@@ -219,7 +203,6 @@ export async function tabTotals(c) {
  */
 export function deleteCharbonnier(c) {
   return gs.withLock(async () => {
-    const row = await freshRow(c); // jamais une ligne décalée : on supprimerait un autre charbonnier
     const totals = await tabTotals(c);
     const St = gs.q(SHEETS.STOCK);
     if (PRODUCTS.some((p) => totals.qty[p.code])) {
@@ -233,7 +216,7 @@ export function deleteCharbonnier(c) {
       requests.push({ deleteSheet: { sheetId: meta.sheets.get(c.tab).sheetId } });
     }
     const reg = meta.sheets.get(SHEETS.CHARBONNIERS);
-    requests.push({ deleteDimension: { range: { sheetId: reg.sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } } });
+    requests.push({ deleteDimension: { range: { sheetId: reg.sheetId, dimension: 'ROWS', startIndex: c.row - 1, endIndex: c.row } } });
     await gs.batchUpdate(requests);
     await gs.getMeta(true);
     await loadRegistry();
@@ -285,7 +268,7 @@ export function setPlafond(c, value) {
   const v = Math.round(Number(value));
   if (!(v >= 0) || v > PLAFOND.max) throw new UserError(`Plafond invalide : il doit être entre 0 et ${PLAFOND.max} ${env.currency}.`);
   return gs.withLock(async () => {
-    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!I${await freshRow(c)}`, [[v]]);
+    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!I${c.row}`, [[v]]);
     await loadRegistry();
     await rebuildFormulas();
   });
@@ -318,7 +301,7 @@ export function plafondNotice(weekSum, added) {
 /** Payer ou non la citoyenneté à un charbonnier quand il fournit du charbon. */
 export function setCitizenship(c, payer) {
   return gs.withLock(async () => {
-    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!H${await freshRow(c)}`, [[payer ? 'OUI' : 'NON']]);
+    await gs.write(`${gs.q(SHEETS.CHARBONNIERS)}!H${c.row}`, [[payer ? 'OUI' : 'NON']]);
     await loadRegistry();
     await rebuildFormulas();
   });
@@ -368,18 +351,10 @@ export function deleteDeposit(c, ref) {
       : rows.findLastIndex((r) => r[IDX.source] === 'Discord' && r[IDX.ref]);
     if (idx === -1) throw new UserError(ref ? `Aucun dépôt avec la réf **${ref}**.` : 'Aucun dépôt fait via Discord à annuler.');
     const r = rows[idx];
-    // On vide les cellules du dépôt au lieu de supprimer la ligne : rien ne se décale, et si Google répond trop
-    // tard et que l'opération est relancée, la référence n'existe plus → rien d'autre n'est effacé.
-    await gs.clear(`${gs.q(c.tab)}!A${idx + 2}:${TAB_LAST}${idx + 2}`);
+    const { sheetId } = await gs.sheetProps(c.tab);
+    await gs.batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: idx + 1, endIndex: idx + 2 } } }]);
     return { ref: r[IDX.ref], qty: qtyAt(r, 'depot'), week: r[IDX.week], montant: num(r[IDX.montant]) };
   });
-}
-
-/** Dernier dépôt fait via Discord (pour proposer de l'annuler), ou null. */
-export async function lastDiscordDeposit(c) {
-  const rows = await gs.read(tabRange(c), { unformatted: true });
-  const r = rows.findLast((x) => x[IDX.source] === 'Discord' && x[IDX.ref]);
-  return r ? { ref: String(r[IDX.ref]), qty: qtyAt(r, 'depot'), week: r[IDX.week], montant: num(r[IDX.montant]) } : null;
 }
 
 export function summarize(rows, week) {
@@ -411,31 +386,4 @@ export async function salariesForWeek(week) {
   return tabs
     .map(({ c, rows }) => ({ c, ...withPlafond(summarize(rows, week), c) }))
     .filter((s) => s.c.actif || s.count > 0);
-}
-
-/**
- * Activité de chaque charbonnier (actifs et inactifs), du plus inactif au plus actif :
- * depuis combien de jours il est enregistré, et depuis combien de jours il n'a rien fourni
- * (depuis son dernier dépôt, ou depuis son arrivée s'il n'a jamais rien déposé).
- */
-export async function charbonnierActivity(now = toSheetSerial()) {
-  const tabs = await readTabs(registry);
-  const rowsOf = new Map(tabs.map(({ c, rows }) => [c, rows]));
-  return registry
-    .map((c) => {
-      const dates = (rowsOf.get(c) ?? [])
-        .filter((r) => typeof r[IDX.date] === 'number' && PRODUCTS.some((p) => qtyAt(r, 'depot')[p.code]))
-        .map((r) => r[IDX.date]);
-      const lastAt = dates.length ? Math.max(...dates) : null;
-      const since = lastAt ?? c.addedAt;
-      return {
-        c,
-        count: dates.length,
-        addedAt: c.addedAt,
-        lastAt,
-        daysHere: c.addedAt === null ? null : Math.floor(now - c.addedAt),
-        daysIdle: since === null ? null : Math.floor(now - since),
-      };
-    })
-    .sort((a, b) => (b.daysIdle ?? -1) - (a.daysIdle ?? -1));
 }

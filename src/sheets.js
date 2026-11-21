@@ -5,7 +5,6 @@ import { env } from './config.js';
  * qui relaie les appels vers l'API Google Sheets.
  */
 const RETRYABLE = new Set(['meta', 'get', 'batchGet', 'update', 'batchUpdateValues', 'clear']);
-const READS = new Set(['meta', 'get', 'batchGet']);
 
 async function call(op, args) {
   if (!env.appsScriptUrl || !env.appsScriptSecret) {
@@ -22,9 +21,7 @@ async function call(op, args) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret: env.appsScriptSecret, op, args }),
         redirect: 'follow',
-        // Un script Google bloqué ne doit pas figer le bot. Une lecture répond en 1-2 s : au-delà de 20 s elle est
-        // bloquée côté Google et on réessaie aussitôt ; une écriture (qui fait recalculer le Sheet) a droit à 60 s.
-        signal: AbortSignal.timeout(READS.has(op) ? 20000 : 60000),
+        signal: AbortSignal.timeout(60000), // un script Google bloqué ne doit pas figer le bot
       });
       const text = await res.text();
       let json;
